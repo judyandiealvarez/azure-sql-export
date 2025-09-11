@@ -636,15 +636,24 @@ class AzureSQLImporter:
             # Split by semicolon and execute each statement
             statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
             
+            print(f"\n🔍 DEBUG: Found {len(statements)} statements to execute for {description}")
+            for i, stmt in enumerate(statements):
+                print(f"Statement {i+1}: {stmt[:100]}...")
+            
             cursor = self.connection.cursor()
             for i, statement in enumerate(statements):
                 if statement and not statement.startswith('--'):
                     try:
+                        print(f"\n🔍 DEBUG: Executing statement {i+1}/{len(statements)}:")
+                        print(f"SQL: {statement}")
                         cursor.execute(statement)
                         logger.info(f"Executed statement {i+1}/{len(statements)} for {description}")
+                        print(f"✅ Statement {i+1} executed successfully")
                     except Exception as e:
                         logger.error(f"Error executing statement {i+1} for {description}: {e}")
                         logger.error(f"Statement: {statement[:100]}...")
+                        print(f"❌ ERROR executing statement {i+1}: {e}")
+                        print(f"Failed SQL: {statement}")
                         cursor.rollback()
                         return False
             
@@ -1176,16 +1185,27 @@ class AzureSQLImporter:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         sql_content = f.read()
                     
+                    # Debug: Show original SQL content
+                    print(f"\n🔍 DEBUG: Original SQL content for {description}:")
+                    print("=" * 80)
+                    print(sql_content)
+                    print("=" * 80)
+                    
                     # Replace CREATE or ALTER with CREATE OR ALTER
                     if sql_content.strip().upper().startswith('CREATE '):
                         modified_sql = sql_content.replace('CREATE ', 'CREATE OR ALTER ', 1)
+                        print(f"🔍 DEBUG: Replaced 'CREATE ' with 'CREATE OR ALTER '")
                     elif sql_content.strip().upper().startswith('ALTER '):
                         modified_sql = sql_content.replace('ALTER ', 'CREATE OR ALTER ', 1)
+                        print(f"🔍 DEBUG: Replaced 'ALTER ' with 'CREATE OR ALTER '")
                     else:
                         # Fallback: try to find the first occurrence
                         modified_sql = sql_content.replace('CREATE ', 'CREATE OR ALTER ', 1)
                         if 'CREATE OR ALTER' not in modified_sql:
                             modified_sql = sql_content.replace('ALTER ', 'CREATE OR ALTER ', 1)
+                            print(f"🔍 DEBUG: Fallback - Replaced 'ALTER ' with 'CREATE OR ALTER '")
+                        else:
+                            print(f"🔍 DEBUG: Fallback - Replaced 'CREATE ' with 'CREATE OR ALTER '")
                     
                     # Write to temporary file
                     temp_file = file_path.parent / f"temp_{file_path.name}"
@@ -1194,7 +1214,11 @@ class AzureSQLImporter:
                     
                     # Log the SQL being executed for debugging
                     logger.info(f"Executing SQL for {description}:")
-                    logger.info(f"SQL: {modified_sql[:200]}...")  # Show first 200 chars
+                    logger.info(f"Full SQL:\n{modified_sql}")
+                    print(f"\n🔍 DEBUG: Full SQL being executed for {description}:")
+                    print("=" * 80)
+                    print(modified_sql)
+                    print("=" * 80)
                     
                     success = self.execute_sql_file(temp_file, description)
                     temp_file.unlink()  # Clean up temp file
