@@ -573,7 +573,7 @@ class AzureSQLExporter:
             
             with open(schema_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Table schema for {schema_name}.{table_name}\n")
-                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(table_schema)
             
             logger.info(f"Exported table schema: {schema_file}")
@@ -597,8 +597,8 @@ class AzureSQLExporter:
                 view_file = self.views_dir / f"{schema_name}.{view_name}.sql"
                 with open(view_file, 'w', encoding='utf-8') as f:
                     f.write(f"-- View definition for {schema_name}.{view_name}\n")
-                    f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                    f.write(f"CREATE VIEW [{schema_name}].[{view_name}] AS\n{view_definition}\n")
+                    f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"CREATE VIEW [{schema_name}].[{view_name}] AS\n{view_definition}")
                 
                 logger.info(f"Exported view: {view_file}")
                 
@@ -613,8 +613,8 @@ class AzureSQLExporter:
             proc_file = self.procedures_dir / f"{schema_name}.{proc_name}.sql"
             with open(proc_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Stored procedure: {schema_name}.{proc_name}\n")
-                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(proc['definition'] + "\n")
+                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(proc['definition'])
             
             logger.info(f"Exported stored procedure: {proc_file}")
         
@@ -626,8 +626,8 @@ class AzureSQLExporter:
             func_file = self.functions_dir / f"{schema_name}.{func_name}.sql"
             with open(func_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Function: {schema_name}.{func_name}\n")
-                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(func['definition'] + "\n")
+                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(func['definition'])
             
             logger.info(f"Exported function: {func_file}")
         
@@ -640,16 +640,16 @@ class AzureSQLExporter:
             with open(trigger_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Trigger: {schema_name}.{trigger_name}\n")
                 f.write(f"-- Table: {schema_name}.{trigger['table']}\n")
-                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 
                 # Write the full trigger definition
                 if trigger['definition']:
-                    f.write(trigger['definition'] + "\n")
+                    f.write(trigger['definition'])
                 else:
                     # Fallback if definition is not available
                     f.write(f"-- Warning: Trigger definition not available\n")
                     f.write(f"-- This trigger exists on table {schema_name}.{trigger['table']}\n")
-                    f.write(f"-- Please recreate manually or check permissions\n")
+                    f.write(f"-- Please recreate manually or check permissions")
             
             logger.info(f"Exported trigger: {trigger_file}")
     
