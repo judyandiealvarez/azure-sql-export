@@ -507,49 +507,53 @@ class AzureSQLImporter:
             return 0
     
     def get_procedure_schema(self, schema_name: str, procedure_name: str) -> str:
-        """Get current procedure schema definition."""
+        """Get current procedure schema definition using sp_helptext (same as export)."""
         try:
             cursor = self.connection.cursor()
-            cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{procedure_name}")
-            result = cursor.fetchone()
+            cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{procedure_name}")
+            definition_rows = cursor.fetchall()
+            definition = "\n".join([row[0].rstrip('\r\n') for row in definition_rows]) if definition_rows else ""
             cursor.close()
-            return result[0] if result and result[0] else ""
+            return definition
         except Exception as e:
             logger.error(f"Error getting procedure schema for {schema_name}.{procedure_name}: {e}")
             return ""
     
     def get_function_schema(self, schema_name: str, function_name: str) -> str:
-        """Get current function schema definition."""
+        """Get current function schema definition using sp_helptext (same as export)."""
         try:
             cursor = self.connection.cursor()
-            cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{function_name}")
-            result = cursor.fetchone()
+            cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{function_name}")
+            definition_rows = cursor.fetchall()
+            definition = "\n".join([row[0].rstrip('\r\n') for row in definition_rows]) if definition_rows else ""
             cursor.close()
-            return result[0] if result and result[0] else ""
+            return definition
         except Exception as e:
             logger.error(f"Error getting function schema for {schema_name}.{function_name}: {e}")
             return ""
     
     def get_view_schema(self, schema_name: str, view_name: str) -> str:
-        """Get current view schema definition."""
+        """Get current view schema definition using sp_helptext (same as export)."""
         try:
             cursor = self.connection.cursor()
-            cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{view_name}")
-            result = cursor.fetchone()
+            cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{view_name}")
+            definition_rows = cursor.fetchall()
+            definition = "\n".join([row[0].rstrip('\r\n') for row in definition_rows]) if definition_rows else ""
             cursor.close()
-            return result[0] if result and result[0] else ""
+            return definition
         except Exception as e:
             logger.error(f"Error getting view schema for {schema_name}.{view_name}: {e}")
             return ""
     
     def get_trigger_schema(self, schema_name: str, trigger_name: str) -> str:
-        """Get current trigger schema definition."""
+        """Get current trigger schema definition using sp_helptext (same as export)."""
         try:
             cursor = self.connection.cursor()
-            cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{trigger_name}")
-            result = cursor.fetchone()
+            cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{trigger_name}")
+            definition_rows = cursor.fetchall()
+            definition = "\n".join([row[0].rstrip('\r\n') for row in definition_rows]) if definition_rows else ""
             cursor.close()
-            return result[0] if result and result[0] else ""
+            return definition
         except Exception as e:
             logger.error(f"Error getting trigger schema for {schema_name}.{trigger_name}: {e}")
             return ""
