@@ -1176,13 +1176,25 @@ class AzureSQLImporter:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         sql_content = f.read()
                     
-                    # Replace CREATE with CREATE OR ALTER
-                    modified_sql = sql_content.replace('CREATE ', 'CREATE OR ALTER ', 1)
+                    # Replace CREATE or ALTER with CREATE OR ALTER
+                    if sql_content.strip().upper().startswith('CREATE '):
+                        modified_sql = sql_content.replace('CREATE ', 'CREATE OR ALTER ', 1)
+                    elif sql_content.strip().upper().startswith('ALTER '):
+                        modified_sql = sql_content.replace('ALTER ', 'CREATE OR ALTER ', 1)
+                    else:
+                        # Fallback: try to find the first occurrence
+                        modified_sql = sql_content.replace('CREATE ', 'CREATE OR ALTER ', 1)
+                        if 'CREATE OR ALTER' not in modified_sql:
+                            modified_sql = sql_content.replace('ALTER ', 'CREATE OR ALTER ', 1)
                     
                     # Write to temporary file
                     temp_file = file_path.parent / f"temp_{file_path.name}"
                     with open(temp_file, 'w', encoding='utf-8') as f:
                         f.write(modified_sql)
+                    
+                    # Log the SQL being executed for debugging
+                    logger.info(f"Executing SQL for {description}:")
+                    logger.info(f"SQL: {modified_sql[:200]}...")  # Show first 200 chars
                     
                     success = self.execute_sql_file(temp_file, description)
                     temp_file.unlink()  # Clean up temp file
