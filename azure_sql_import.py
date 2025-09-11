@@ -644,8 +644,22 @@ class AzureSQLImporter:
             with open(file_path, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
             
-            # Split by GO statements for proper batch execution
-            batches = [batch.strip() for batch in sql_content.split('GO') if batch.strip()]
+            # Split by GO statements and execute each batch separately
+            batches = []
+            current_batch = []
+            
+            for line in sql_content.split('\n'):
+                line = line.strip()
+                if line.upper() == 'GO':
+                    if current_batch:
+                        batches.append('\n'.join(current_batch))
+                        current_batch = []
+                elif line and not line.startswith('--'):
+                    current_batch.append(line)
+            
+            # Add the last batch if it exists
+            if current_batch:
+                batches.append('\n'.join(current_batch))
             
             print(f"\n🔍 DEBUG: Found {len(batches)} batches to execute for {description}")
             for i, batch in enumerate(batches):
@@ -653,13 +667,13 @@ class AzureSQLImporter:
             
             cursor = self.connection.cursor()
             for i, batch in enumerate(batches):
-                if batch and not batch.startswith('--'):
+                if batch.strip():
                     try:
                         print(f"\n🔍 DEBUG: Executing batch {i+1}/{len(batches)}:")
                         print(f"SQL: {batch}")
                         cursor.execute(batch)
                         logger.info(f"Executed batch {i+1}/{len(batches)} for {description}")
-                        print(f"✅ Statement {i+1} executed successfully")
+                        print(f"✅ Batch {i+1} executed successfully")
                     except Exception as e:
                         logger.error(f"Error executing batch {i+1} for {description}: {e}")
                         logger.error(f"Batch: {batch[:100]}...")
