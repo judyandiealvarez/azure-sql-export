@@ -1,0 +1,22 @@
+# Azure SQL Database Comparison Configuration
+# Copy this file to config.yaml and update with your target database settings
+
+# Target database connection settings
+server: "target-server.database.windows.net"
+database: "target-database-name"
+
+# Authentication type: "sql" or "azure_ad"
+authentication_type: "sql"
+
+# SQL Server authentication (only needed if authentication_type is "sql")
+username: "target-username"
+password: "target-password"
+
+# ODBC driver name
+driver: "ODBC Driver 17 for SQL Server"
+
+# Comparison settings
+import_directory: "export_output"  # Directory containing exported files
+show_data_samples: true           # Show sample data in comparison
+sample_size: 5                   # Number of sample rows to show
+export_report: true              # Export detailed report to file

@@ -1,6 +1,6 @@
-# Azure SQL Database Export & Import Tools
+# Azure SQL Database Export, Import & Comparison Tools
 
-Python scripts to export and import Azure SQL Database schema objects and table data for migration between servers.
+Python scripts to export, import, and compare Azure SQL Database schema objects and table data for migration between servers.
 
 ## Features
 
@@ -21,6 +21,14 @@ Python scripts to export and import Azure SQL Database schema objects and table 
 - **Progress Tracking**: Real-time progress updates and batch processing
 - **Dependency Analysis**: Automatically analyzes and resolves object dependencies
 - **Smart Import Order**: Uses topological sorting to import objects in correct order
+
+### Comparison Tool (`azure_sql_compare.py`)
+- **Schema Comparison**: Compare exported schema with target database
+- **Data Comparison**: Compare row counts and sample data
+- **Detailed Differences**: Show exact differences between objects
+- **Change Summary**: Categorize changes (new, modified, deleted, unchanged)
+- **Export Reports**: Generate detailed comparison reports
+- **Safe Analysis**: Read-only comparison without making changes
 
 ## Prerequisites
 
@@ -107,6 +115,15 @@ Python scripts to export and import Azure SQL Database schema objects and table 
    ```
 
 2. Update `config.yaml` with your **target** Azure SQL Database details:
+
+### For Comparison (Target Database)
+
+1. Copy and edit the comparison configuration file:
+   ```bash
+   cp config.compare.example.yaml config.yaml
+   ```
+
+2. Update `config.yaml` with your **target** Azure SQL Database details:
    ```yaml
    # Target database connection settings
    server: "target-server.database.windows.net"
@@ -128,6 +145,25 @@ Python scripts to export and import Azure SQL Database schema objects and table 
    auto_confirm: false               # Skip interactive confirmations
    truncate_tables: false           # Truncate tables before importing data
    alter_existing: true             # Allow altering existing objects
+   ```
+
+   ```yaml
+   # Target database connection settings
+   server: "target-server.database.windows.net"
+   database: "target-database-name"
+   
+   # Authentication type: "sql" or "azure_ad"
+   authentication_type: "sql"
+   
+   # SQL Server authentication
+   username: "target-username"
+   password: "target-password"
+   
+   # Comparison settings
+   import_directory: "export_output"  # Directory containing exported files
+   show_data_samples: true           # Show sample data in comparison
+   sample_size: 5                   # Number of sample rows to show
+   export_report: true              # Export detailed report to file
    ```
 
 ## Usage
@@ -167,6 +203,21 @@ python azure_sql_import.py --config config.yaml \
 #### Analyze Dependencies
 ```bash
 python azure_sql_import.py --config config.yaml --show-dependencies
+```
+
+### Comparison (Target Database)
+
+#### Basic Comparison
+```bash
+python azure_sql_compare.py --config config.yaml
+```
+
+#### Comparison with Custom Options
+```bash
+python azure_sql_compare.py --config config.yaml \
+  --import-dir /path/to/exported/files \
+  --no-samples \
+  --sample-size 10
 ```
 
 ### Export Options
@@ -219,6 +270,14 @@ The import tool automatically analyzes dependencies between database objects:
 
 Objects are imported in the correct order to avoid dependency errors.
 
+#### Comparison Options
+The comparison tool provides detailed analysis without making changes:
+- **Schema Comparison**: Shows differences between exported and database objects
+- **Data Comparison**: Compares row counts and shows sample data
+- **Change Categories**: New, modified, deleted, and unchanged objects
+- **Detailed Reports**: Export comprehensive comparison reports
+- **Safe Analysis**: Read-only operations that don't modify the database
+
 ## Output Structure
 
 The script creates the following directory structure organized by object type:
@@ -263,7 +322,17 @@ export_output/
    python azure_sql_export.py --config config.yaml
    ```
 
-2. **Import to Target Database**:
+2. **Compare with Target Database** (Optional but recommended):
+   ```bash
+   # Configure target database connection
+   cp config.compare.example.yaml config.yaml
+   # Edit config.yaml with target database details
+   
+   # Compare exported files with target database
+   python azure_sql_compare.py --config config.yaml
+   ```
+
+3. **Import to Target Database**:
    ```bash
    # Configure target database connection
    cp config.import.example.yaml config.yaml
@@ -307,6 +376,15 @@ export_output/
 | `auto_confirm` | Skip interactive confirmations | false |
 | `truncate_tables` | Truncate tables before importing data | false |
 | `alter_existing` | Allow altering existing objects | true |
+
+### Comparison Configuration Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `import_directory` | Directory containing exported files | "export_output" |
+| `show_data_samples` | Show sample data in comparison | true |
+| `sample_size` | Number of sample rows to show | 5 |
+| `export_report` | Export detailed report to file | true |
 
 ## Troubleshooting
 
