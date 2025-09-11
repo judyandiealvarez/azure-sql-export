@@ -20,6 +20,7 @@ import_directory: "export_output"  # Directory containing exported files
 import_data: true                  # Whether to import table data
 batch_size: 1000                  # Batch size for data import
 data_format: "sql"                # "sql" or "binary" - must match export format
+reporting_interval: 1000          # Report progress every N batches (default: 1000)
 
 # Interactive options
 auto_confirm: false               # Skip interactive confirmations

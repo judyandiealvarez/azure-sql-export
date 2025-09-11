@@ -242,8 +242,9 @@ exclude_schemas: []
 #### Binary Data Export
 For large datasets, use binary format for better performance and compression:
 ```yaml
-data_format: "binary"  # Much faster and smaller files
-batch_size: 10000      # Larger batches for binary export
+data_format: "binary"      # Much faster and smaller files
+batch_size: 10000          # Larger batches for binary export
+reporting_interval: 1000   # Report progress every N batches (default: 1000)
 ```
 
 **Binary Format Benefits:**
@@ -251,6 +252,22 @@ batch_size: 10000      # Larger batches for binary export
 - **Better Compression**: 60-80% smaller file sizes
 - **Preserves Data Types**: No string conversion issues
 - **Large Dataset Support**: Handles millions of rows efficiently
+- **Optimized Logging**: Configurable reporting to avoid performance impact
+
+#### Performance Optimization
+For maximum performance with large datasets:
+```yaml
+# High-performance settings
+data_format: "binary"        # Use binary format
+batch_size: 10000           # Larger batches
+reporting_interval: 10000   # Report every 10,000 batches (less frequent logging)
+```
+
+**Performance Tips:**
+- **Binary Format**: Always use binary for large datasets (>100K rows)
+- **Larger Batches**: Increase `batch_size` for better throughput
+- **Less Frequent Logging**: Increase `reporting_interval` to reduce I/O overhead
+- **System Resources**: More RAM allows larger batch sizes
 
 ### Exclude System Schemas
 To exclude system schemas (default behavior):
@@ -387,6 +404,7 @@ export_output/
 | `export_data` | Whether to export table data | true |
 | `batch_size` | Number of rows per batch | 1000 |
 | `data_format` | Data export format: "sql" or "binary" | "sql" |
+| `reporting_interval` | Report progress every N batches | 1000 |
 | `include_schemas` | List of schemas to include (empty = all) | [] |
 | `exclude_schemas` | List of schemas to exclude | ["sys", "INFORMATION_SCHEMA"] |
 
@@ -397,6 +415,7 @@ export_output/
 | `import_directory` | Directory containing exported files | "export_output" |
 | `import_data` | Whether to import table data | true |
 | `data_format` | Data import format: "sql" or "binary" | "sql" |
+| `reporting_interval` | Report progress every N batches | 1000 |
 | `auto_confirm` | Skip interactive confirmations | false |
 | `truncate_tables` | Truncate tables before importing data | false |
 | `alter_existing` | Allow altering existing objects | true |

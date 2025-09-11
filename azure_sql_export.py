@@ -405,6 +405,7 @@ class AzureSQLExporter:
             
             # Export data in batches
             batch_size = self.config.get('batch_size', 1000)
+            reporting_interval = self.config.get('reporting_interval', 1000)  # Report every N batches
             insert_statements = []
             
             for offset in range(0, row_count, batch_size):
@@ -416,6 +417,11 @@ class AzureSQLExporter:
                 """)
                 
                 rows = cursor.fetchall()
+                
+                # Only log every N batches to avoid slowing down export
+                batch_num = offset//batch_size + 1
+                if batch_num % reporting_interval == 0 or batch_num == (row_count-1)//batch_size + 1:
+                    logger.info(f"Processed batch {batch_num} for {full_table_name} ({offset + len(rows)}/{row_count} rows)")
                 
                 for row in rows:
                     values = []
@@ -473,6 +479,7 @@ class AzureSQLExporter:
             
             # Export data in batches
             batch_size = self.config.get('batch_size', 10000)  # Larger batches for binary
+            reporting_interval = self.config.get('reporting_interval', 1000)  # Report every N batches
             all_data = []
             
             for offset in range(0, row_count, batch_size):
@@ -486,7 +493,10 @@ class AzureSQLExporter:
                 rows = cursor.fetchall()
                 all_data.extend(rows)
                 
-                logger.info(f"Processed batch {offset//batch_size + 1} for {full_table_name}")
+                # Only log every N batches to avoid slowing down export
+                batch_num = offset//batch_size + 1
+                if batch_num % reporting_interval == 0 or batch_num == (row_count-1)//batch_size + 1:
+                    logger.info(f"Processed batch {batch_num} for {full_table_name} ({len(all_data)}/{row_count} rows)")
             
             cursor.close()
             

@@ -608,6 +608,7 @@ class AzureSQLImporter:
             
             # Execute INSERT statements in batches
             batch_size = self.config.get('batch_size', 1000)
+            reporting_interval = self.config.get('reporting_interval', 1000)  # Report every N batches
             for i in range(0, len(insert_statements), batch_size):
                 batch = insert_statements[i:i + batch_size]
                 for statement in batch:
@@ -620,7 +621,11 @@ class AzureSQLImporter:
                         return False
                 
                 cursor.commit()
-                logger.info(f"Imported batch {i//batch_size + 1} for {schema_name}.{table_name}")
+                
+                # Only log every N batches to avoid slowing down import
+                batch_num = i//batch_size + 1
+                if batch_num % reporting_interval == 0 or batch_num == (len(insert_statements)-1)//batch_size + 1:
+                    logger.info(f"Imported batch {batch_num}/{(len(insert_statements)-1)//batch_size + 1} for {schema_name}.{table_name} ({i + len(batch)}/{len(insert_statements)} statements)")
             
             cursor.close()
             logger.info(f"Successfully imported data for {schema_name}.{table_name}")
@@ -690,6 +695,7 @@ class AzureSQLImporter:
             
             # Insert data in batches
             batch_size = self.config.get('batch_size', 1000)
+            reporting_interval = self.config.get('reporting_interval', 1000)  # Report every N batches
             total_rows = len(data)
             
             for i in range(0, total_rows, batch_size):
@@ -705,7 +711,11 @@ class AzureSQLImporter:
                         return False
                 
                 cursor.commit()
-                logger.info(f"Imported batch {i//batch_size + 1}/{(total_rows-1)//batch_size + 1} for {schema_name}.{table_name}")
+                
+                # Only log every N batches to avoid slowing down import
+                batch_num = i//batch_size + 1
+                if batch_num % reporting_interval == 0 or batch_num == (total_rows-1)//batch_size + 1:
+                    logger.info(f"Imported batch {batch_num}/{(total_rows-1)//batch_size + 1} for {schema_name}.{table_name} ({i + len(batch)}/{total_rows} rows)")
             
             cursor.close()
             logger.info(f"Successfully imported {total_rows} rows for {schema_name}.{table_name}")
