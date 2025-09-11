@@ -26,6 +26,7 @@ import pyodbc
 import pandas as pd
 from pathlib import Path
 from difflib import unified_diff
+from collections import defaultdict, deque
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +38,157 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+class DependencyAnalyzer:
+    """Analyzes dependencies between database objects."""
+    
+    def __init__(self):
+        self.dependencies = defaultdict(set)  # object -> set of dependencies
+        self.dependents = defaultdict(set)    # object -> set of dependents
+        self.object_types = {}                # object -> type
+    
+    def add_object(self, obj_name: str, obj_type: str):
+        """Add an object to the dependency graph."""
+        self.object_types[obj_name] = obj_type
+    
+    def add_dependency(self, obj_name: str, dependency: str):
+        """Add a dependency relationship."""
+        if dependency != obj_name:  # Avoid self-dependencies
+            self.dependencies[obj_name].add(dependency)
+            self.dependents[dependency].add(obj_name)
+    
+    def analyze_sql_dependencies(self, sql_content: str, obj_name: str) -> Set[str]:
+        """Analyze SQL content to find dependencies."""
+        dependencies = set()
+        
+        # Common patterns for object references
+        patterns = [
+            r'FROM\s+\[?(\w+)\]?\.\[?(\w+)\]?',  # FROM schema.table
+            r'JOIN\s+\[?(\w+)\]?\.\[?(\w+)\]?',   # JOIN schema.table
+            r'EXEC\s+\[?(\w+)\]?\.\[?(\w+)\]?',   # EXEC schema.procedure
+            r'EXECUTE\s+\[?(\w+)\]?\.\[?(\w+)\]?', # EXECUTE schema.procedure
+            r'\[?(\w+)\]?\.\[?(\w+)\]?\(',         # Function calls
+            r'CREATE\s+VIEW\s+\[?(\w+)\]?\.\[?(\w+)\]?\s+AS\s+.*?FROM\s+\[?(\w+)\]?\.\[?(\w+)\]?',  # View dependencies
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, sql_content, re.IGNORECASE | re.MULTILINE)
+            for match in matches:
+                if len(match) == 2:
+                    schema, obj = match
+                    if schema and obj:
+                        dep_name = f"{schema}.{obj}"
+                        dependencies.add(dep_name)
+                elif len(match) == 4:  # For view patterns
+                    schema1, obj1, schema2, obj2 = match
+                    if schema2 and obj2:
+                        dep_name = f"{schema2}.{obj2}"
+                        dependencies.add(dep_name)
+        
+        return dependencies
+    
+    def topological_sort(self) -> List[str]:
+        """Perform topological sort to determine import order."""
+        # Calculate in-degrees
+        in_degree = defaultdict(int)
+        for obj in self.object_types:
+            in_degree[obj] = len(self.dependencies[obj])
+        
+        # Find objects with no dependencies
+        queue = deque([obj for obj in self.object_types if in_degree[obj] == 0])
+        result = []
+        
+        while queue:
+            obj = queue.popleft()
+            result.append(obj)
+            
+            # Reduce in-degree for dependents
+            for dependent in self.dependents[obj]:
+                in_degree[dependent] -= 1
+                if in_degree[dependent] == 0:
+                    queue.append(dependent)
+        
+        # Check for circular dependencies
+        if len(result) != len(self.object_types):
+            remaining = set(self.object_types.keys()) - set(result)
+            logger.warning(f"Circular dependencies detected for objects: {remaining}")
+            # Add remaining objects at the end
+            result.extend(remaining)
+        
+        return result
+    
+    def get_import_order(self, objects: Dict[str, List[Dict]]) -> List[Tuple[str, Dict]]:
+        """Get the proper import order for all objects."""
+        # Add all objects to the dependency graph
+        for obj_type, obj_list in objects.items():
+            for obj in obj_list:
+                obj_name = f"{obj['schema']}.{obj['name']}"
+                self.add_object(obj_name, obj_type)
+        
+        # Analyze dependencies from SQL files
+        for obj_type, obj_list in objects.items():
+            for obj in obj_list:
+                obj_name = f"{obj['schema']}.{obj['name']}"
+                try:
+                    with open(obj['file'], 'r', encoding='utf-8') as f:
+                        sql_content = f.read()
+                    
+                    dependencies = self.analyze_sql_dependencies(sql_content, obj_name)
+                    for dep in dependencies:
+                        self.add_dependency(obj_name, dep)
+                        
+                except Exception as e:
+                    logger.warning(f"Could not analyze dependencies for {obj_name}: {e}")
+        
+        # Get topological order
+        ordered_objects = self.topological_sort()
+        
+        # Convert back to (type, obj) tuples
+        result = []
+        for obj_name in ordered_objects:
+            obj_type = self.object_types[obj_name]
+            # Find the original object
+            for obj in objects[obj_type]:
+                if f"{obj['schema']}.{obj['name']}" == obj_name:
+                    result.append((obj_type, obj))
+                    break
+        
+        return result
+    
+    def show_dependency_info(self, objects: Dict[str, List[Dict]]):
+        """Show dependency information for debugging."""
+        logger.info("Analyzing dependencies...")
+        
+        # Add all objects to the dependency graph
+        for obj_type, obj_list in objects.items():
+            for obj in obj_list:
+                obj_name = f"{obj['schema']}.{obj['name']}"
+                self.add_object(obj_name, obj_type)
+        
+        # Analyze dependencies from SQL files
+        for obj_type, obj_list in objects.items():
+            for obj in obj_list:
+                obj_name = f"{obj['schema']}.{obj['name']}"
+                try:
+                    with open(obj['file'], 'r', encoding='utf-8') as f:
+                        sql_content = f.read()
+                    
+                    dependencies = self.analyze_sql_dependencies(sql_content, obj_name)
+                    for dep in dependencies:
+                        self.add_dependency(obj_name, dep)
+                        
+                except Exception as e:
+                    logger.warning(f"Could not analyze dependencies for {obj_name}: {e}")
+        
+        # Show dependency information
+        logger.info("Dependency Analysis:")
+        for obj_name in sorted(self.object_types.keys()):
+            deps = self.dependencies[obj_name]
+            if deps:
+                logger.info(f"  {obj_name} depends on: {', '.join(sorted(deps))}")
+            else:
+                logger.info(f"  {obj_name} has no dependencies")
 
 
 class AzureSQLImporter:
@@ -473,61 +625,69 @@ class AzureSQLImporter:
             return False
     
     def import_schema_objects(self, exported_files: Dict[str, List[Dict]], existing_objects: Dict[str, Dict]):
-        """Import schema objects with comparison and confirmation."""
-        logger.info("Starting schema object import...")
+        """Import schema objects with dependency analysis and proper ordering."""
+        logger.info("Starting schema object import with dependency analysis...")
         
-        # Import order: tables, views, functions, procedures, triggers
-        import_order = ['tables', 'views', 'functions', 'procedures', 'triggers']
+        # Analyze dependencies and get proper import order
+        analyzer = DependencyAnalyzer()
+        import_order = analyzer.get_import_order(exported_files)
         
-        for object_type in import_order:
-            if not exported_files[object_type]:
+        logger.info(f"Import order determined: {len(import_order)} objects")
+        
+        # Group by type for logging
+        type_counts = defaultdict(int)
+        for obj_type, obj in import_order:
+            type_counts[obj_type] += 1
+        
+        logger.info("Import plan:")
+        for obj_type, count in type_counts.items():
+            logger.info(f"  {obj_type.capitalize()}: {count} objects")
+        
+        # Import objects in dependency order
+        for obj_type, obj in import_order:
+            schema_name = obj['schema']
+            object_name = obj['name']
+            file_path = obj['file']
+            full_name = f"{schema_name}.{object_name}"
+            
+            # Check if object exists
+            object_key = f"{schema_name}.{object_name}"
+            exists = object_key in existing_objects[obj_type]
+            
+            if exists and self.alter_existing:
+                # Compare schemas
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    new_schema = f.read()
+                
+                if obj_type == 'tables':
+                    existing_schema = self.get_table_schema(schema_name, object_name)
+                else:
+                    existing_schema = ""  # For other objects, we'll just show the file content
+                
+                differences = self.compare_schemas(new_schema, existing_schema, full_name)
+                
+                print(f"\n--- {obj_type.upper()}: {full_name} ---")
+                print("Differences found:")
+                for diff_line in differences[:10]:  # Show first 10 lines
+                    print(diff_line)
+                if len(differences) > 10:
+                    print(f"... and {len(differences) - 10} more lines")
+                
+                if not self.ask_confirmation(f"Import {obj_type[:-1]} {full_name}?"):
+                    logger.info(f"Skipped {obj_type[:-1]} {full_name}")
+                    continue
+            
+            elif exists and not self.alter_existing:
+                logger.info(f"Skipping existing {obj_type[:-1]} {full_name}")
                 continue
             
-            logger.info(f"\n=== Importing {object_type.upper()} ===")
-            
-            for obj in exported_files[object_type]:
-                schema_name = obj['schema']
-                object_name = obj['name']
-                file_path = obj['file']
-                full_name = f"{schema_name}.{object_name}"
-                
-                # Check if object exists
-                object_key = f"{schema_name}.{object_name}"
-                exists = object_key in existing_objects[object_type]
-                
-                if exists and self.alter_existing:
-                    # Compare schemas
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        new_schema = f.read()
-                    
-                    if object_type == 'tables':
-                        existing_schema = self.get_table_schema(schema_name, object_name)
-                    else:
-                        existing_schema = ""  # For other objects, we'll just show the file content
-                    
-                    differences = self.compare_schemas(new_schema, existing_schema, full_name)
-                    
-                    print(f"\n--- {object_type.upper()}: {full_name} ---")
-                    print("Differences found:")
-                    for diff_line in differences[:10]:  # Show first 10 lines
-                        print(diff_line)
-                    if len(differences) > 10:
-                        print(f"... and {len(differences) - 10} more lines")
-                    
-                    if not self.ask_confirmation(f"Import {object_type[:-1]} {full_name}?"):
-                        logger.info(f"Skipped {object_type[:-1]} {full_name}")
-                        continue
-                
-                elif exists and not self.alter_existing:
-                    logger.info(f"Skipping existing {object_type[:-1]} {full_name}")
-                    continue
-                
-                # Execute the import
-                description = f"{object_type[:-1]} {full_name}"
-                if self.execute_sql_file(file_path, description):
-                    logger.info(f"Successfully imported {description}")
-                else:
-                    logger.error(f"Failed to import {description}")
+            # Execute the import
+            description = f"{obj_type[:-1]} {full_name}"
+            if self.execute_sql_file(file_path, description):
+                logger.info(f"Successfully imported {description}")
+            else:
+                logger.error(f"Failed to import {description}")
+                # Continue with other objects even if one fails
     
     def import_table_data_all(self, exported_files: Dict[str, List[Dict]]):
         """Import data for all tables."""
@@ -604,6 +764,7 @@ def main():
     parser.add_argument('--truncate-tables', action='store_true', help='Truncate tables before importing data')
     parser.add_argument('--no-alter', action='store_true', help='Skip altering existing objects')
     parser.add_argument('--schema-only', action='store_true', help='Import schema only, skip data')
+    parser.add_argument('--show-dependencies', action='store_true', help='Show dependency analysis and exit')
     
     args = parser.parse_args()
     
@@ -622,6 +783,22 @@ def main():
         
         if args.schema_only:
             importer.config['import_data'] = False
+        
+        # Show dependencies and exit if requested
+        if args.show_dependencies:
+            if not importer.connect():
+                sys.exit(1)
+            try:
+                exported_files = importer.load_exported_files()
+                if not any(exported_files.values()):
+                    logger.error("No exported files found to analyze")
+                    sys.exit(1)
+                
+                analyzer = DependencyAnalyzer()
+                analyzer.show_dependency_info(exported_files)
+                sys.exit(0)
+            finally:
+                importer.disconnect()
         
         success = importer.run_import()
         sys.exit(0 if success else 1)

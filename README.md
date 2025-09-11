@@ -19,6 +19,8 @@ Python scripts to export and import Azure SQL Database schema objects and table 
 - **Safe Import**: Rollback capabilities and detailed logging
 - **Object Management**: ALTER existing objects or skip them
 - **Progress Tracking**: Real-time progress updates and batch processing
+- **Dependency Analysis**: Automatically analyzes and resolves object dependencies
+- **Smart Import Order**: Uses topological sorting to import objects in correct order
 
 ## Prerequisites
 
@@ -162,6 +164,11 @@ python azure_sql_import.py --config config.yaml \
   --schema-only
 ```
 
+#### Analyze Dependencies
+```bash
+python azure_sql_import.py --config config.yaml --show-dependencies
+```
+
 ### Export Options
 
 #### Schema Only (No Data)
@@ -200,6 +207,17 @@ exclude_schemas:
 - `--no-alter`: Skip altering existing objects
 - `--schema-only`: Import schema only, skip data
 - `--import-dir`: Specify custom import directory
+- `--show-dependencies`: Analyze and display object dependencies
+
+#### Dependency Analysis
+The import tool automatically analyzes dependencies between database objects:
+- **Views** that depend on tables
+- **Functions** that reference other objects
+- **Stored Procedures** that call functions or reference tables
+- **Triggers** that depend on tables
+- **Cross-schema dependencies**
+
+Objects are imported in the correct order to avoid dependency errors.
 
 ## Output Structure
 
