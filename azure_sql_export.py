@@ -193,12 +193,11 @@ class AzureSQLExporter:
             objects['views'] = [{'schema': row[0], 'name': row[1]} 
                               for row in cursor.fetchall()]
             
-            # Get stored procedures
+            # Get stored procedures - use OBJECT_DEFINITION for exact formatting
             query = f"""
                 SELECT 
                     ROUTINE_SCHEMA,
-                    ROUTINE_NAME,
-                    ROUTINE_DEFINITION
+                    ROUTINE_NAME
                 FROM INFORMATION_SCHEMA.ROUTINES
                 WHERE ROUTINE_TYPE = 'PROCEDURE'
                 {schema_filter.replace('TABLE_SCHEMA', 'ROUTINE_SCHEMA')}
@@ -211,15 +210,30 @@ class AzureSQLExporter:
                 cursor.execute(query, exclude_schemas)
             else:
                 cursor.execute(query)
-            objects['stored_procedures'] = [{'schema': row[0], 'name': row[1], 'definition': row[2]} 
-                                          for row in cursor.fetchall()]
             
-            # Get functions
+            # Get procedure definitions using OBJECT_DEFINITION for exact formatting
+            procedures = []
+            for row in cursor.fetchall():
+                schema_name, proc_name = row
+                
+                # Get procedure definition using OBJECT_DEFINITION
+                cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{proc_name}")
+                definition_result = cursor.fetchone()
+                definition = definition_result[0] if definition_result and definition_result[0] else ""
+                
+                procedures.append({
+                    'schema': schema_name,
+                    'name': proc_name,
+                    'definition': definition
+                })
+            
+            objects['stored_procedures'] = procedures
+            
+            # Get functions - use OBJECT_DEFINITION for exact formatting
             query = f"""
                 SELECT 
                     ROUTINE_SCHEMA,
-                    ROUTINE_NAME,
-                    ROUTINE_DEFINITION
+                    ROUTINE_NAME
                 FROM INFORMATION_SCHEMA.ROUTINES
                 WHERE ROUTINE_TYPE = 'FUNCTION'
                 {schema_filter.replace('TABLE_SCHEMA', 'ROUTINE_SCHEMA')}
@@ -232,8 +246,24 @@ class AzureSQLExporter:
                 cursor.execute(query, exclude_schemas)
             else:
                 cursor.execute(query)
-            objects['functions'] = [{'schema': row[0], 'name': row[1], 'definition': row[2]} 
-                                  for row in cursor.fetchall()]
+            
+            # Get function definitions using OBJECT_DEFINITION for exact formatting
+            functions = []
+            for row in cursor.fetchall():
+                schema_name, func_name = row
+                
+                # Get function definition using OBJECT_DEFINITION
+                cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{func_name}")
+                definition_result = cursor.fetchone()
+                definition = definition_result[0] if definition_result and definition_result[0] else ""
+                
+                functions.append({
+                    'schema': schema_name,
+                    'name': func_name,
+                    'definition': definition
+                })
+            
+            objects['functions'] = functions
             
             # Get triggers - use sys.triggers for better definition access
             cursor.execute("""
@@ -585,20 +615,17 @@ class AzureSQLExporter:
             
             try:
                 cursor = self.connection.cursor()
-                cursor.execute(f"""
-                    SELECT VIEW_DEFINITION
-                    FROM INFORMATION_SCHEMA.VIEWS
-                    WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
-                """, schema_name, view_name)
-                
-                view_definition = cursor.fetchone()[0]
+                # Use OBJECT_DEFINITION for exact formatting
+                cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{view_name}")
+                definition_result = cursor.fetchone()
+                view_definition = definition_result[0] if definition_result and definition_result[0] else ""
                 cursor.close()
                 
                 view_file = self.views_dir / f"{schema_name}.{view_name}.sql"
                 with open(view_file, 'w', encoding='utf-8') as f:
                     f.write(f"-- View definition for {schema_name}.{view_name}\n")
                     f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write(f"CREATE VIEW [{schema_name}].[{view_name}] AS\n{view_definition}")
+                    f.write(view_definition)
                 
                 logger.info(f"Exported view: {view_file}")
                 
