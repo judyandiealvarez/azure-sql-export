@@ -644,27 +644,27 @@ class AzureSQLImporter:
             with open(file_path, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
             
-            # Split by semicolon and execute each statement
-            statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
+            # Split by GO statements for proper batch execution
+            batches = [batch.strip() for batch in sql_content.split('GO') if batch.strip()]
             
-            print(f"\n🔍 DEBUG: Found {len(statements)} statements to execute for {description}")
-            for i, stmt in enumerate(statements):
-                print(f"Statement {i+1}: {stmt[:100]}...")
+            print(f"\n🔍 DEBUG: Found {len(batches)} batches to execute for {description}")
+            for i, batch in enumerate(batches):
+                print(f"Batch {i+1}: {batch[:100]}...")
             
             cursor = self.connection.cursor()
-            for i, statement in enumerate(statements):
-                if statement and not statement.startswith('--'):
+            for i, batch in enumerate(batches):
+                if batch and not batch.startswith('--'):
                     try:
-                        print(f"\n🔍 DEBUG: Executing statement {i+1}/{len(statements)}:")
-                        print(f"SQL: {statement}")
-                        cursor.execute(statement)
-                        logger.info(f"Executed statement {i+1}/{len(statements)} for {description}")
+                        print(f"\n🔍 DEBUG: Executing batch {i+1}/{len(batches)}:")
+                        print(f"SQL: {batch}")
+                        cursor.execute(batch)
+                        logger.info(f"Executed batch {i+1}/{len(batches)} for {description}")
                         print(f"✅ Statement {i+1} executed successfully")
                     except Exception as e:
-                        logger.error(f"Error executing statement {i+1} for {description}: {e}")
-                        logger.error(f"Statement: {statement[:100]}...")
-                        print(f"❌ ERROR executing statement {i+1}: {e}")
-                        print(f"Failed SQL: {statement}")
+                        logger.error(f"Error executing batch {i+1} for {description}: {e}")
+                        logger.error(f"Batch: {batch[:100]}...")
+                        print(f"❌ ERROR executing batch {i+1}: {e}")
+                        print(f"Failed SQL: {batch}")
                         cursor.rollback()
                         return False
             
