@@ -226,6 +226,49 @@ class AzureSQLImporter:
             logger.error(f"Invalid configuration file format: {e}")
             sys.exit(1)
     
+    def _normalize_sql(self, sql_text: str) -> str:
+        """Normalize SQL text for comparison by removing cosmetic differences."""
+        if not sql_text:
+            return ""
+        
+        lines = sql_text.split('\n')
+        normalized_lines = []
+        
+        for line in lines:
+            # Remove leading/trailing whitespace
+            line = line.strip()
+            
+            # Skip empty lines
+            if not line:
+                continue
+                
+            # Skip comment lines that are just metadata
+            if line.startswith('--'):
+                # Skip generation comments and metadata comments
+                if any(meta in line.lower() for meta in [
+                    'generated on', 'script date', 'object:', 'table schema for'
+                ]):
+                    continue
+                # Keep other comments that might be important
+                normalized_lines.append(line)
+                continue
+            
+            # Skip SET statements that are just formatting
+            if line.upper().startswith('SET ') and any(setting in line.upper() for setting in [
+                'ANSI_NULLS', 'QUOTED_IDENTIFIER'
+            ]):
+                continue
+                
+            # Skip GO statements
+            if line.upper().strip() == 'GO':
+                continue
+            
+            # Normalize whitespace in SQL statements
+            line = re.sub(r'\s+', ' ', line)
+            normalized_lines.append(line)
+        
+        return '\n'.join(normalized_lines)
+    
     def connect(self) -> bool:
         """Establish connection to Azure SQL Database."""
         try:
@@ -452,6 +495,15 @@ class AzureSQLImporter:
         if not existing_schema:
             return [f"New object: {object_name}"]
         
+        # Normalize both schemas for comparison
+        new_normalized = self._normalize_sql(new_schema)
+        existing_normalized = self._normalize_sql(existing_schema)
+        
+        # If normalized versions are identical, no real differences
+        if new_normalized == existing_normalized:
+            return ["No differences found"]
+        
+        # Show differences in original format for user review
         new_lines = new_schema.strip().split('\n')
         existing_lines = existing_schema.strip().split('\n')
         

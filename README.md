@@ -28,6 +28,7 @@ Python scripts to export, import, and compare Azure SQL Database schema objects 
 - **Schema Comparison**: Compare exported schema with target database
 - **Data Comparison**: Compare row counts and sample data (SQL or binary)
 - **Binary Data Analysis**: Analyze compressed binary data files
+- **Smart Comparison**: Ignores cosmetic differences (comments, timestamps, formatting)
 - **Detailed Differences**: Show exact differences between objects
 - **Change Summary**: Categorize changes (new, modified, deleted, unchanged)
 - **Export Reports**: Generate detailed comparison reports
@@ -287,6 +288,42 @@ Processed batch 5000 for dbo.large_table (50000000/50000000 rows)
 - **Time Format**: Shows completion time in HH:MM:SS format
 - **Export & Import**: Works for both operations
 - **SQL & Binary**: Available for both data formats
+
+#### Smart Schema Comparison
+The comparison tools now intelligently ignore cosmetic differences that don't affect functionality:
+
+**Ignored Differences:**
+- **Generation Comments**: `-- Generated on 2025-09-11 21:37:29`
+- **Script Headers**: `-- Table schema for...`, `-- Object: Table...`
+- **SET Statements**: `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`
+- **GO Statements**: Batch separators
+- **Whitespace**: Extra spaces, tabs, blank lines
+- **Timestamp Variations**: Different generation times
+
+**Example:**
+```sql
+-- These are considered IDENTICAL despite cosmetic differences:
+
+-- Version 1:
+-- Generated on 2025-09-11 21:37:29
+CREATE TABLE [dbo].[Users] (
+    [ID] int IDENTITY(1,1) NOT NULL,
+    [Name] nvarchar(100) NOT NULL
+)
+
+-- Version 2:
+-- Generated on 2025-09-11 22:15:45
+CREATE TABLE [dbo].[Users] (
+    [ID] int IDENTITY(1,1) NOT NULL,
+    [Name] nvarchar(100) NOT NULL
+)
+```
+
+**Benefits:**
+- **Reduced False Positives**: No more alerts for identical schemas
+- **Focus on Real Changes**: Only shows meaningful differences
+- **Better User Experience**: Less noise in comparison results
+- **Accurate Import Decisions**: Confident choices about what to import
 
 ### Exclude System Schemas
 To exclude system schemas (default behavior):
