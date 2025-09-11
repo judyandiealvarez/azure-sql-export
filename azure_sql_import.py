@@ -808,6 +808,10 @@ class AzureSQLImporter:
         """Import schema objects with dependency analysis and proper ordering."""
         logger.info("Starting schema object import with dependency analysis...")
         
+        # Track statistics
+        skipped_identical = 0
+        total_processed = 0
+        
         # Analyze dependencies and get proper import order
         analyzer = DependencyAnalyzer()
         import_order = analyzer.get_import_order(exported_files)
@@ -846,6 +850,12 @@ class AzureSQLImporter:
                 
                 differences = self.compare_schemas(new_schema, existing_schema, full_name)
                 
+                # Check if there are no real differences
+                if len(differences) == 1 and "No differences found" in differences[0]:
+                    skipped_identical += 1
+                    logger.info(f"Skipping {obj_type[:-1]} {full_name} - no differences found (identical)")
+                    continue
+                
                 print(f"\n--- {obj_type.upper()}: {full_name} ---")
                 print("Differences found:")
                 for diff_line in differences[:10]:  # Show first 10 lines
@@ -864,10 +874,17 @@ class AzureSQLImporter:
             # Execute the import
             description = f"{obj_type[:-1]} {full_name}"
             if self.execute_sql_file(file_path, description):
+                total_processed += 1
                 logger.info(f"Successfully imported {description}")
             else:
                 logger.error(f"Failed to import {description}")
                 # Continue with other objects even if one fails
+        
+        # Print summary
+        if skipped_identical > 0:
+            logger.info(f"Import summary: {total_processed} objects imported, {skipped_identical} identical objects skipped")
+        else:
+            logger.info(f"Import summary: {total_processed} objects imported")
     
     def import_table_data_all(self, exported_files: Dict[str, List[Dict]]):
         """Import data for all tables."""

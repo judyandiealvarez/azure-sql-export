@@ -16,6 +16,7 @@ Python scripts to export, import, and compare Azure SQL Database schema objects 
 ### Import Tool (`azure_sql_import.py`)
 - **Interactive Import**: Compare and confirm imports with detailed differences
 - **Schema Comparison**: Shows differences between existing and new objects
+- **Auto-Skip Identical**: Automatically skips objects with no differences
 - **Data Import Options**: Truncate and import or append to existing tables
 - **Binary Data Import**: High-performance binary data import with compression
 - **Safe Import**: Rollback capabilities and detailed logging
@@ -324,6 +325,36 @@ CREATE TABLE [dbo].[Users] (
 - **Focus on Real Changes**: Only shows meaningful differences
 - **Better User Experience**: Less noise in comparison results
 - **Accurate Import Decisions**: Confident choices about what to import
+- **Auto-Skip Identical**: No interactive prompts for identical objects
+- **Efficient Workflow**: Faster imports by skipping unnecessary operations
+
+#### Auto-Skip Identical Objects
+The import tool now automatically skips objects that are identical to existing ones:
+
+**Behavior:**
+- **No Interactive Prompt**: Identical objects are skipped without asking
+- **Automatic Detection**: Uses smart comparison to identify identical schemas
+- **Progress Logging**: Shows which objects were skipped and why
+- **Summary Report**: Displays count of imported vs skipped objects
+
+**Example Output:**
+```
+Skipping table dbo.Users - no differences found (identical)
+Skipping view dbo.UserSummary - no differences found (identical)
+
+--- TABLES: dbo.Products ---
+Differences found:
++ [Price] decimal(10,2) NOT NULL
+Import table dbo.Products? [y/N]: y
+
+Import summary: 1 objects imported, 2 identical objects skipped
+```
+
+**Benefits:**
+- **Faster Imports**: No time wasted on identical objects
+- **Cleaner Workflow**: Only interact with objects that actually need changes
+- **Better Focus**: Attention on objects that require decisions
+- **Reduced Errors**: Less chance of accidentally overwriting identical objects
 
 ### Exclude System Schemas
 To exclude system schemas (default behavior):
