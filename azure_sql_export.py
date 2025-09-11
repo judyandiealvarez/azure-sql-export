@@ -223,13 +223,19 @@ class AzureSQLExporter:
             else:
                 cursor.execute(query)
             
-            # Get procedure definitions using OBJECT_DEFINITION for exact formatting
+            # Get procedure definitions using sys.sql_modules for exact original formatting
             procedures = []
             for row in cursor.fetchall():
                 schema_name, proc_name = row
                 
-                # Get procedure definition using OBJECT_DEFINITION
-                cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{proc_name}")
+                # Get procedure definition using sys.sql_modules for exact original formatting
+                cursor.execute("""
+                    SELECT m.definition 
+                    FROM sys.sql_modules m
+                    INNER JOIN sys.objects o ON m.object_id = o.object_id
+                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                    WHERE s.name = ? AND o.name = ? AND o.type = 'P'
+                """, schema_name, proc_name)
                 definition_result = cursor.fetchone()
                 definition = definition_result[0] if definition_result and definition_result[0] else ""
                 
@@ -259,13 +265,19 @@ class AzureSQLExporter:
             else:
                 cursor.execute(query)
             
-            # Get function definitions using OBJECT_DEFINITION for exact formatting
+            # Get function definitions using sys.sql_modules for exact original formatting
             functions = []
             for row in cursor.fetchall():
                 schema_name, func_name = row
                 
-                # Get function definition using OBJECT_DEFINITION
-                cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{func_name}")
+                # Get function definition using sys.sql_modules for exact original formatting
+                cursor.execute("""
+                    SELECT m.definition 
+                    FROM sys.sql_modules m
+                    INNER JOIN sys.objects o ON m.object_id = o.object_id
+                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                    WHERE s.name = ? AND o.name = ? AND o.type IN ('FN', 'IF', 'TF')
+                """, schema_name, func_name)
                 definition_result = cursor.fetchone()
                 definition = definition_result[0] if definition_result and definition_result[0] else ""
                 
@@ -306,8 +318,14 @@ class AzureSQLExporter:
                 if exclude_schemas and schema_name in exclude_schemas:
                     continue
                 
-                # Get trigger definition
-                cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{trigger_name}")
+                # Get trigger definition using sys.sql_modules for exact original formatting
+                cursor.execute("""
+                    SELECT m.definition 
+                    FROM sys.sql_modules m
+                    INNER JOIN sys.objects o ON m.object_id = o.object_id
+                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                    WHERE s.name = ? AND o.name = ? AND o.type = 'TR'
+                """, schema_name, trigger_name)
                 definition_result = cursor.fetchone()
                 definition = definition_result[0] if definition_result and definition_result[0] else ""
                 
@@ -627,8 +645,14 @@ class AzureSQLExporter:
             
             try:
                 cursor = self.connection.cursor()
-                # Use OBJECT_DEFINITION for exact formatting
-                cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{view_name}")
+                # Use sys.sql_modules for exact original formatting
+                cursor.execute("""
+                    SELECT m.definition 
+                    FROM sys.sql_modules m
+                    INNER JOIN sys.objects o ON m.object_id = o.object_id
+                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                    WHERE s.name = ? AND o.name = ? AND o.type = 'V'
+                """, schema_name, view_name)
                 definition_result = cursor.fetchone()
                 view_definition = definition_result[0] if definition_result and definition_result[0] else ""
                 cursor.close()
