@@ -623,8 +623,6 @@ class AzureSQLExporter:
                 
                 view_file = self.views_dir / f"{schema_name}.{view_name}.sql"
                 with open(view_file, 'w', encoding='utf-8') as f:
-                    f.write(f"-- View definition for {schema_name}.{view_name}\n")
-                    f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                     f.write(view_definition)
                 
                 logger.info(f"Exported view: {view_file}")
@@ -639,8 +637,6 @@ class AzureSQLExporter:
             
             proc_file = self.procedures_dir / f"{schema_name}.{proc_name}.sql"
             with open(proc_file, 'w', encoding='utf-8') as f:
-                f.write(f"-- Stored procedure: {schema_name}.{proc_name}\n")
-                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(proc['definition'])
             
             logger.info(f"Exported stored procedure: {proc_file}")
@@ -652,8 +648,6 @@ class AzureSQLExporter:
             
             func_file = self.functions_dir / f"{schema_name}.{func_name}.sql"
             with open(func_file, 'w', encoding='utf-8') as f:
-                f.write(f"-- Function: {schema_name}.{func_name}\n")
-                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(func['definition'])
             
             logger.info(f"Exported function: {func_file}")
@@ -665,10 +659,6 @@ class AzureSQLExporter:
             
             trigger_file = self.triggers_dir / f"{schema_name}.{trigger_name}.sql"
             with open(trigger_file, 'w', encoding='utf-8') as f:
-                f.write(f"-- Trigger: {schema_name}.{trigger_name}\n")
-                f.write(f"-- Table: {schema_name}.{trigger['table']}\n")
-                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                
                 # Write the full trigger definition
                 if trigger['definition']:
                     f.write(trigger['definition'])
