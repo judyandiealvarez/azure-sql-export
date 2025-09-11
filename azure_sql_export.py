@@ -43,11 +43,23 @@ logger = logging.getLogger(__name__)
 class AzureSQLExporter:
     """Main class for exporting Azure SQL Database schema and data."""
     
-    def __init__(self, config_file: str = "config.yaml"):
+    def __init__(self, config_file: str = "config.yaml", config_dict: dict = None, output_dir: str = None):
         """Initialize the exporter with configuration."""
-        self.config = self._load_config(config_file)
+        if config_dict is not None:
+            # Use provided config dictionary
+            self.config = config_dict
+        else:
+            # Load config from file
+            self.config = self._load_config(config_file)
+        
         self.connection = None
-        self.output_dir = Path(self.config.get('output_directory', 'export_output'))
+        
+        # Use provided output directory or from config
+        if output_dir is not None:
+            self.output_dir = Path(output_dir)
+        else:
+            self.output_dir = Path(self.config.get('output_directory', 'export_output'))
+        
         self.output_dir.mkdir(exist_ok=True)
         
         # Create subdirectories organized by object type

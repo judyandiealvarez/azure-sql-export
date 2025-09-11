@@ -197,11 +197,22 @@ class DependencyAnalyzer:
 class AzureSQLImporter:
     """Main class for importing Azure SQL Database schema and data."""
     
-    def __init__(self, config_file: str = "config.yaml"):
+    def __init__(self, config_file: str = "config.yaml", config_dict: dict = None, import_dir: str = None):
         """Initialize the importer with configuration."""
-        self.config = self._load_config(config_file)
+        if config_dict is not None:
+            # Use provided config dictionary
+            self.config = config_dict
+        else:
+            # Load config from file
+            self.config = self._load_config(config_file)
+        
         self.connection = None
-        self.import_dir = Path(self.config.get('import_directory', 'export_output'))
+        
+        # Use provided import directory or from config
+        if import_dir is not None:
+            self.import_dir = Path(import_dir)
+        else:
+            self.import_dir = Path(self.config.get('import_directory', 'export_output'))
         self.schema_dir = self.import_dir / 'schema'
         self.data_dir = self.import_dir / 'data'
         self.binary_data_dir = self.import_dir / 'binary_data'

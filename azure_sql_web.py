@@ -77,7 +77,7 @@ def run_export_operation(operation_id, config_path, output_dir):
             return
         
         # Create exporter
-        exporter = AzureSQLExporter(config, output_dir)
+        exporter = AzureSQLExporter(config_dict=config, output_dir=output_dir)
         
         if not exporter.connect():
             operation_status[operation_id] = {'status': 'error', 'message': 'Failed to connect to database'}
@@ -120,7 +120,7 @@ def run_import_operation(operation_id, config_path, import_dir):
             return
         
         # Create importer
-        importer = AzureSQLImporter(config, import_dir)
+        importer = AzureSQLImporter(config_dict=config, import_dir=import_dir)
         
         if not importer.connect():
             operation_status[operation_id] = {'status': 'error', 'message': 'Failed to connect to database'}
@@ -163,7 +163,7 @@ def run_compare_operation(operation_id, config_path, import_dir):
             return
         
         # Create comparer
-        comparer = DatabaseComparator(config, import_dir)
+        comparer = DatabaseComparator(config_dict=config, import_dir=import_dir)
         
         if not comparer.connect():
             operation_status[operation_id] = {'status': 'error', 'message': 'Failed to connect to database'}
