@@ -52,3 +52,4 @@ config.yml
 my_config.yaml
 my_config.yml
 .env
+export_output_prod.zip
