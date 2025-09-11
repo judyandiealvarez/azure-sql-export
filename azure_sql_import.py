@@ -626,7 +626,8 @@ class AzureSQLImporter:
                 
                 # Only log every N batches to avoid slowing down import
                 batch_num = i//batch_size + 1
-                if batch_num % reporting_interval == 0 or batch_num == (len(insert_statements)-1)//batch_size + 1:
+                total_batches = (len(insert_statements)-1)//batch_size + 1
+                if batch_num % reporting_interval == 0 or batch_num == total_batches:
                     # Calculate ETA
                     elapsed_time = time.time() - start_time
                     processed_statements = i + len(batch)
@@ -636,9 +637,9 @@ class AzureSQLImporter:
                         eta_seconds = remaining_statements / statements_per_second if statements_per_second > 0 else 0
                         eta = datetime.now() + timedelta(seconds=eta_seconds)
                         eta_str = eta.strftime("%H:%M:%S")
-                        logger.info(f"Imported batch {batch_num}/{(len(insert_statements)-1)//batch_size + 1} for {schema_name}.{table_name} ({processed_statements}/{len(insert_statements)} statements) - ETA: {eta_str}")
+                        logger.info(f"Imported batch {batch_num}/{total_batches} for {schema_name}.{table_name} ({processed_statements}/{len(insert_statements)} statements) - ETA: {eta_str}")
                     else:
-                        logger.info(f"Imported batch {batch_num}/{(len(insert_statements)-1)//batch_size + 1} for {schema_name}.{table_name} ({processed_statements}/{len(insert_statements)} statements)")
+                        logger.info(f"Imported batch {batch_num}/{total_batches} for {schema_name}.{table_name} ({processed_statements}/{len(insert_statements)} statements)")
             
             cursor.close()
             logger.info(f"Successfully imported data for {schema_name}.{table_name}")
@@ -728,7 +729,8 @@ class AzureSQLImporter:
                 
                 # Only log every N batches to avoid slowing down import
                 batch_num = i//batch_size + 1
-                if batch_num % reporting_interval == 0 or batch_num == (total_rows-1)//batch_size + 1:
+                total_batches = (total_rows-1)//batch_size + 1
+                if batch_num % reporting_interval == 0 or batch_num == total_batches:
                     # Calculate ETA
                     elapsed_time = time.time() - start_time
                     processed_rows = i + len(batch)
@@ -738,9 +740,9 @@ class AzureSQLImporter:
                         eta_seconds = remaining_rows / rows_per_second if rows_per_second > 0 else 0
                         eta = datetime.now() + timedelta(seconds=eta_seconds)
                         eta_str = eta.strftime("%H:%M:%S")
-                        logger.info(f"Imported batch {batch_num}/{(total_rows-1)//batch_size + 1} for {schema_name}.{table_name} ({processed_rows}/{total_rows} rows) - ETA: {eta_str}")
+                        logger.info(f"Imported batch {batch_num}/{total_batches} for {schema_name}.{table_name} ({processed_rows}/{total_rows} rows) - ETA: {eta_str}")
                     else:
-                        logger.info(f"Imported batch {batch_num}/{(total_rows-1)//batch_size + 1} for {schema_name}.{table_name} ({processed_rows}/{total_rows} rows)")
+                        logger.info(f"Imported batch {batch_num}/{total_batches} for {schema_name}.{table_name} ({processed_rows}/{total_rows} rows)")
             
             cursor.close()
             logger.info(f"Successfully imported {total_rows} rows for {schema_name}.{table_name}")

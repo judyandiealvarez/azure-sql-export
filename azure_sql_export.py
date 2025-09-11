@@ -422,7 +422,8 @@ class AzureSQLExporter:
                 
                 # Only log every N batches to avoid slowing down export
                 batch_num = offset//batch_size + 1
-                if batch_num % reporting_interval == 0 or batch_num == (row_count-1)//batch_size + 1:
+                total_batches = (row_count-1)//batch_size + 1
+                if batch_num % reporting_interval == 0 or batch_num == total_batches:
                     # Calculate ETA
                     elapsed_time = time.time() - start_time
                     processed_rows = offset + len(rows)
@@ -432,9 +433,9 @@ class AzureSQLExporter:
                         eta_seconds = remaining_rows / rows_per_second if rows_per_second > 0 else 0
                         eta = datetime.now() + timedelta(seconds=eta_seconds)
                         eta_str = eta.strftime("%H:%M:%S")
-                        logger.info(f"Processed batch {batch_num} for {full_table_name} ({processed_rows}/{row_count} rows) - ETA: {eta_str}")
+                        logger.info(f"Processed batch {batch_num}/{total_batches} for {full_table_name} ({processed_rows}/{row_count} rows) - ETA: {eta_str}")
                     else:
-                        logger.info(f"Processed batch {batch_num} for {full_table_name} ({processed_rows}/{row_count} rows)")
+                        logger.info(f"Processed batch {batch_num}/{total_batches} for {full_table_name} ({processed_rows}/{row_count} rows)")
                 
                 for row in rows:
                     values = []
@@ -509,7 +510,8 @@ class AzureSQLExporter:
                 
                 # Only log every N batches to avoid slowing down export
                 batch_num = offset//batch_size + 1
-                if batch_num % reporting_interval == 0 or batch_num == (row_count-1)//batch_size + 1:
+                total_batches = (row_count-1)//batch_size + 1
+                if batch_num % reporting_interval == 0 or batch_num == total_batches:
                     # Calculate ETA
                     elapsed_time = time.time() - start_time
                     processed_rows = len(all_data)
@@ -519,9 +521,9 @@ class AzureSQLExporter:
                         eta_seconds = remaining_rows / rows_per_second if rows_per_second > 0 else 0
                         eta = datetime.now() + timedelta(seconds=eta_seconds)
                         eta_str = eta.strftime("%H:%M:%S")
-                        logger.info(f"Processed batch {batch_num} for {full_table_name} ({processed_rows}/{row_count} rows) - ETA: {eta_str}")
+                        logger.info(f"Processed batch {batch_num}/{total_batches} for {full_table_name} ({processed_rows}/{row_count} rows) - ETA: {eta_str}")
                     else:
-                        logger.info(f"Processed batch {batch_num} for {full_table_name} ({processed_rows}/{row_count} rows)")
+                        logger.info(f"Processed batch {batch_num}/{total_batches} for {full_table_name} ({processed_rows}/{row_count} rows)")
             
             cursor.close()
             
