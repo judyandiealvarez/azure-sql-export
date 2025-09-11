@@ -231,7 +231,7 @@ class AzureSQLExporter:
                 # Get procedure definition using sp_helptext for complete original script
                 cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{proc_name}")
                 definition_rows = cursor.fetchall()
-                definition = "".join([row[0].rstrip() for row in definition_rows]) if definition_rows else ""
+                definition = "".join([row[0].strip() for row in definition_rows]) if definition_rows else ""
                 
                 # Generate exact SSMS format with headers and SET statements
                 ssms_format = f"""/****** Object: StoredProcedure [{schema_name}].[{proc_name}] Script Date: {datetime.now().strftime('%m/%d/%Y %I:%M:%S %p')} ******/
