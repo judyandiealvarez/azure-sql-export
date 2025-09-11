@@ -1,15 +1,24 @@
-# Azure SQL Database Export Tool
+# Azure SQL Database Export & Import Tools
 
-A Python script to export Azure SQL Database schema objects and table data for migration to another server.
+Python scripts to export and import Azure SQL Database schema objects and table data for migration between servers.
 
 ## Features
 
+### Export Tool (`azure_sql_export.py`)
 - **Schema Export**: Exports tables, views, stored procedures, functions, and triggers
 - **Data Export**: Exports table data as SQL INSERT statements
 - **Organized Output**: Creates structured directories for easy migration
 - **Authentication Support**: Supports both SQL Server and Azure AD authentication
 - **Batch Processing**: Handles large datasets efficiently
 - **Migration Script**: Generates a master migration script with proper order
+
+### Import Tool (`azure_sql_import.py`)
+- **Interactive Import**: Compare and confirm imports with detailed differences
+- **Schema Comparison**: Shows differences between existing and new objects
+- **Data Import Options**: Truncate and import or append to existing tables
+- **Safe Import**: Rollback capabilities and detailed logging
+- **Object Management**: ALTER existing objects or skip them
+- **Progress Tracking**: Real-time progress updates and batch processing
 
 ## Prerequisites
 
@@ -27,12 +36,14 @@ A Python script to export Azure SQL Database schema objects and table data for m
 
 ## Configuration
 
-1. Copy and edit the configuration file:
+### For Export (Source Database)
+
+1. Copy and edit the export configuration file:
    ```bash
    cp config.example.yaml config.yaml
    ```
 
-2. Update `config.yaml` with your Azure SQL Database details:
+2. Update `config.yaml` with your **source** Azure SQL Database details:
 
    **For SQL Server Authentication:**
    ```yaml
@@ -86,22 +97,77 @@ A Python script to export Azure SQL Database schema objects and table data for m
      - "INFORMATION_SCHEMA"
    ```
 
+### For Import (Target Database)
+
+1. Copy and edit the import configuration file:
+   ```bash
+   cp config.import.example.yaml config.yaml
+   ```
+
+2. Update `config.yaml` with your **target** Azure SQL Database details:
+   ```yaml
+   # Target database connection settings
+   server: "target-server.database.windows.net"
+   database: "target-database-name"
+   
+   # Authentication type: "sql" or "azure_ad"
+   authentication_type: "sql"
+   
+   # SQL Server authentication
+   username: "target-username"
+   password: "target-password"
+   
+   # Import settings
+   import_directory: "export_output"  # Directory containing exported files
+   import_data: true                  # Whether to import table data
+   batch_size: 1000                  # Batch size for data import
+   
+   # Interactive options
+   auto_confirm: false               # Skip interactive confirmations
+   truncate_tables: false           # Truncate tables before importing data
+   alter_existing: true             # Allow altering existing objects
+   ```
+
 ## Usage
 
-### Basic Usage
+### Export (Source Database)
+
+#### Basic Export
 ```bash
 python azure_sql_export.py --config config.yaml
 ```
 
-### Custom Output Directory
+#### Custom Output Directory
 ```bash
 python azure_sql_export.py --config config.yaml --output /path/to/output
 ```
 
-### Schema Only (No Data)
+### Import (Target Database)
+
+#### Interactive Import
+```bash
+python azure_sql_import.py --config config.yaml
+```
+
+#### Non-Interactive Import
+```bash
+python azure_sql_import.py --config config.yaml --auto-confirm
+```
+
+#### Import with Custom Options
+```bash
+python azure_sql_import.py --config config.yaml \
+  --import-dir /path/to/exported/files \
+  --truncate-tables \
+  --schema-only
+```
+
+### Export Options
+
+#### Schema Only (No Data)
 Edit your config file and set `export_data: false`
 
-### Export Specific Schemas Only
+#### Export Specific Schemas Only
 To export only specific schemas (e.g., only 'dbo' and 'custom_schema'):
 ```yaml
 include_schemas:
@@ -117,8 +183,23 @@ include_schemas: []
 exclude_schemas:
   - "sys"
   - "INFORMATION_SCHEMA"
-  - "guest"
-```
+     - "guest"
+   ```
+
+### Import Options
+
+#### Interactive Mode Features
+- **Schema Comparison**: Shows differences between existing and new objects
+- **Data Import Choices**: Choose to truncate and import or append data
+- **Object-by-Object Confirmation**: Confirm each object before importing
+- **Detailed Differences**: See exactly what will change
+
+#### Command Line Options
+- `--auto-confirm`: Skip all interactive prompts
+- `--truncate-tables`: Truncate tables before importing data
+- `--no-alter`: Skip altering existing objects
+- `--schema-only`: Import schema only, skip data
+- `--import-dir`: Specify custom import directory
 
 ## Output Structure
 
@@ -146,6 +227,30 @@ export_output/
 
 ## Migration Process
 
+### Complete Migration Workflow
+
+1. **Export from Source Database**:
+   ```bash
+   # Configure source database connection
+   cp config.example.yaml config.yaml
+   # Edit config.yaml with source database details
+   
+   # Export schema and data
+   python azure_sql_export.py --config config.yaml
+   ```
+
+2. **Import to Target Database**:
+   ```bash
+   # Configure target database connection
+   cp config.import.example.yaml config.yaml
+   # Edit config.yaml with target database details
+   
+   # Interactive import with comparison
+   python azure_sql_import.py --config config.yaml
+   ```
+
+### Manual Migration (Alternative)
+
 1. **Run the export script** on your source Azure SQL Database
 2. **Review the generated files** in the output directory
 3. **On your target server**, run the files in this order:
@@ -168,6 +273,16 @@ export_output/
 | `batch_size` | Number of rows per batch | 1000 |
 | `include_schemas` | List of schemas to include (empty = all) | [] |
 | `exclude_schemas` | List of schemas to exclude | ["sys", "INFORMATION_SCHEMA"] |
+
+### Import Configuration Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `import_directory` | Directory containing exported files | "export_output" |
+| `import_data` | Whether to import table data | true |
+| `auto_confirm` | Skip interactive confirmations | false |
+| `truncate_tables` | Truncate tables before importing data | false |
+| `alter_existing` | Allow altering existing objects | true |
 
 ## Troubleshooting
 

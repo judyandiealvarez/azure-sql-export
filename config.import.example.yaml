@@ -1,0 +1,26 @@
+# Azure SQL Database Import Configuration
+# Copy this file to config.yaml and update with your target database settings
+
+# Target database connection settings
+server: "target-server.database.windows.net"
+database: "target-database-name"
+
+# Authentication type: "sql" or "azure_ad"
+authentication_type: "sql"
+
+# SQL Server authentication (only needed if authentication_type is "sql")
+username: "target-username"
+password: "target-password"
+
+# ODBC driver name
+driver: "ODBC Driver 17 for SQL Server"
+
+# Import settings
+import_directory: "export_output"  # Directory containing exported files
+import_data: true                  # Whether to import table data
+batch_size: 1000                  # Batch size for data import
+
+# Interactive options
+auto_confirm: false               # Skip interactive confirmations
+truncate_tables: false           # Truncate tables before importing data
+alter_existing: true             # Allow altering existing objects
