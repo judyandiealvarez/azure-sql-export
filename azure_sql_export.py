@@ -233,8 +233,15 @@ class AzureSQLExporter:
                 definition_rows = cursor.fetchall()
                 definition = "\n".join([row[0] for row in definition_rows]) if definition_rows else ""
                 
-                # Convert ALTER to CREATE for export purposes
-                definition = definition.replace("ALTER PROCEDURE", "CREATE PROCEDURE", 1)
+                # Generate exact SSMS format with headers and SET statements
+                ssms_format = f"""/****** Object: StoredProcedure [{schema_name}].[{proc_name}] Script Date: {datetime.now().strftime('%m/%d/%Y %I:%M:%S %p')} ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+{definition}
+GO"""
+                definition = ssms_format
                 
                 procedures.append({
                     'schema': schema_name,
