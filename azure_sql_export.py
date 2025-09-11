@@ -233,6 +233,19 @@ class AzureSQLExporter:
                 definition_rows = cursor.fetchall()
                 definition = "\n".join([row[0] for row in definition_rows]) if definition_rows else ""
                 
+                # Convert ALTER to CREATE for export purposes
+                definition = definition.replace("ALTER PROCEDURE", "CREATE PROCEDURE", 1)
+                
+                # Generate SSMS-style script with headers and SET statements
+                ssms_script = f"""/****** Object: StoredProcedure [{schema_name}].[{proc_name}] Script Date: {datetime.now().strftime('%m/%d/%Y %I:%M:%S %p')} ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+{definition}
+GO"""
+                definition = ssms_script
+                
                 procedures.append({
                     'schema': schema_name,
                     'name': proc_name,
@@ -268,6 +281,19 @@ class AzureSQLExporter:
                 cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{func_name}")
                 definition_rows = cursor.fetchall()
                 definition = "\n".join([row[0] for row in definition_rows]) if definition_rows else ""
+                
+                # Convert ALTER to CREATE for export purposes
+                definition = definition.replace("ALTER FUNCTION", "CREATE FUNCTION", 1)
+                
+                # Generate SSMS-style script with headers and SET statements
+                ssms_script = f"""/****** Object: UserDefinedFunction [{schema_name}].[{func_name}] Script Date: {datetime.now().strftime('%m/%d/%Y %I:%M:%S %p')} ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+{definition}
+GO"""
+                definition = ssms_script
                 
                 functions.append({
                     'schema': schema_name,
@@ -310,6 +336,19 @@ class AzureSQLExporter:
                 cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{trigger_name}")
                 definition_rows = cursor.fetchall()
                 definition = "\n".join([row[0] for row in definition_rows]) if definition_rows else ""
+                
+                # Convert ALTER to CREATE for export purposes
+                definition = definition.replace("ALTER TRIGGER", "CREATE TRIGGER", 1)
+                
+                # Generate SSMS-style script with headers and SET statements
+                ssms_script = f"""/****** Object: DdlTrigger [{schema_name}].[{trigger_name}] Script Date: {datetime.now().strftime('%m/%d/%Y %I:%M:%S %p')} ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+{definition}
+GO"""
+                definition = ssms_script
                 
                 triggers.append({
                     'schema': schema_name,
@@ -631,6 +670,19 @@ class AzureSQLExporter:
                 cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{view_name}")
                 definition_rows = cursor.fetchall()
                 view_definition = "\n".join([row[0] for row in definition_rows]) if definition_rows else ""
+                
+                # Convert ALTER to CREATE for export purposes
+                view_definition = view_definition.replace("ALTER VIEW", "CREATE VIEW", 1)
+                
+                # Generate SSMS-style script with headers and SET statements
+                ssms_script = f"""/****** Object: View [{schema_name}].[{view_name}] Script Date: {datetime.now().strftime('%m/%d/%Y %I:%M:%S %p')} ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+{view_definition}
+GO"""
+                view_definition = ssms_script
                 cursor.close()
                 
                 view_file = self.views_dir / f"{schema_name}.{view_name}.sql"
