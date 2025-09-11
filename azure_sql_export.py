@@ -230,31 +230,57 @@ class AzureSQLExporter:
             objects['functions'] = [{'schema': row[0], 'name': row[1], 'definition': row[2]} 
                                   for row in cursor.fetchall()]
             
-            # Get triggers
-            query = f"""
+            # Get triggers - use sys.triggers for better definition access
+            cursor.execute("""
                 SELECT 
-                    TRIGGER_SCHEMA,
-                    TRIGGER_NAME,
-                    EVENT_MANIPULATION,
-                    EVENT_OBJECT_TABLE,
-                    ACTION_STATEMENT
-                FROM INFORMATION_SCHEMA.TRIGGERS
-                WHERE 1=1 {schema_filter.replace('TABLE_SCHEMA', 'TRIGGER_SCHEMA')}
-                ORDER BY TRIGGER_SCHEMA, TRIGGER_NAME
-            """
+                    s.name as schema_name,
+                    t.name as trigger_name,
+                    o.name as table_name,
+                    t.is_disabled,
+                    t.is_not_for_replication,
+                    t.is_instead_of_trigger
+                FROM sys.triggers t
+                INNER JOIN sys.objects o ON t.parent_id = o.object_id
+                INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                WHERE t.parent_class = 1  -- Only table triggers
+                ORDER BY s.name, t.name
+            """)
             
-            if include_schemas:
-                cursor.execute(query, include_schemas)
-            elif exclude_schemas:
-                cursor.execute(query, exclude_schemas)
-            else:
-                cursor.execute(query)
-            objects['triggers'] = [{'schema': row[0], 'name': row[1], 'event': row[2], 
-                                  'table': row[3], 'statement': row[4]} 
-                                 for row in cursor.fetchall()]
+            trigger_info = cursor.fetchall()
+            
+            # Get trigger definitions using OBJECT_DEFINITION
+            triggers = []
+            for row in trigger_info:
+                schema_name, trigger_name, table_name, is_disabled, is_not_for_replication, is_instead_of_trigger = row
+                
+                # Check schema filter
+                if include_schemas and schema_name not in include_schemas:
+                    continue
+                if exclude_schemas and schema_name in exclude_schemas:
+                    continue
+                
+                # Get trigger definition
+                cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{trigger_name}")
+                definition_result = cursor.fetchone()
+                definition = definition_result[0] if definition_result and definition_result[0] else ""
+                
+                triggers.append({
+                    'schema': schema_name,
+                    'name': trigger_name,
+                    'table': table_name,
+                    'definition': definition,
+                    'is_disabled': is_disabled,
+                    'is_not_for_replication': is_not_for_replication,
+                    'is_instead_of_trigger': is_instead_of_trigger
+                })
+            
+            objects['triggers'] = triggers
             
             cursor.close()
             logger.info(f"Retrieved schema objects: {sum(len(v) for v in objects.values())} total")
+            logger.info(f"Triggers found: {len(triggers)}")
+            for trigger in triggers:
+                logger.info(f"  - {trigger['schema']}.{trigger['name']} on {trigger['table']}")
             
         except Exception as e:
             logger.error(f"Error retrieving schema objects: {e}")
@@ -492,11 +518,17 @@ class AzureSQLExporter:
             trigger_file = self.triggers_dir / f"{schema_name}.{trigger_name}.sql"
             with open(trigger_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Trigger: {schema_name}.{trigger_name}\n")
+                f.write(f"-- Table: {schema_name}.{trigger['table']}\n")
                 f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(f"CREATE TRIGGER [{schema_name}].[{trigger_name}]\n")
-                f.write(f"ON [{schema_name}].[{trigger['table']}]\n")
-                f.write(f"FOR {trigger['event']}\n")
-                f.write(f"AS\n{trigger['statement']}\n")
+                
+                # Write the full trigger definition
+                if trigger['definition']:
+                    f.write(trigger['definition'] + "\n")
+                else:
+                    # Fallback if definition is not available
+                    f.write(f"-- Warning: Trigger definition not available\n")
+                    f.write(f"-- This trigger exists on table {schema_name}.{trigger['table']}\n")
+                    f.write(f"-- Please recreate manually or check permissions\n")
             
             logger.info(f"Exported trigger: {trigger_file}")
     

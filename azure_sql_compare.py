@@ -240,10 +240,13 @@ class DatabaseComparator:
             # Get triggers
             cursor.execute("""
                 SELECT 
-                    TRIGGER_SCHEMA,
-                    TRIGGER_NAME
-                FROM INFORMATION_SCHEMA.TRIGGERS
-                ORDER BY TRIGGER_SCHEMA, TRIGGER_NAME
+                    s.name as schema_name,
+                    t.name as trigger_name
+                FROM sys.triggers t
+                INNER JOIN sys.objects o ON t.parent_id = o.object_id
+                INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                WHERE t.parent_class = 1  -- Only table triggers
+                ORDER BY s.name, t.name
             """)
             for row in cursor.fetchall():
                 key = f"{row[0]}.{row[1]}"
