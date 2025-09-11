@@ -242,9 +242,16 @@ class AzureSQLImporter:
         if not sql_text:
             return ""
         
-        # First, remove multi-line comments (/* ... */)
-        # This handles comments that span multiple lines
         import re
+        
+        # Remove SSMS headers and SET statements from exported files
+        # This handles the difference between exported (with headers) and existing (without headers)
+        sql_text = re.sub(r'/\*.*?Script Date:.*?\*/', '', sql_text, flags=re.DOTALL)
+        sql_text = re.sub(r'SET ANSI_NULLS ON\s*', '', sql_text, flags=re.IGNORECASE)
+        sql_text = re.sub(r'SET QUOTED_IDENTIFIER ON\s*', '', sql_text, flags=re.IGNORECASE)
+        sql_text = re.sub(r'GO\s*', '', sql_text, flags=re.IGNORECASE)
+        
+        # Remove multi-line comments (/* ... */)
         sql_text = re.sub(r'/\*.*?\*/', '', sql_text, flags=re.DOTALL)
         
         lines = sql_text.split('\n')
@@ -267,16 +274,6 @@ class AzureSQLImporter:
                     continue
                 # Keep other comments that might be important
                 normalized_lines.append(line)
-                continue
-            
-            # Skip SET statements that are just formatting
-            if line.upper().startswith('SET ') and any(setting in line.upper() for setting in [
-                'ANSI_NULLS', 'QUOTED_IDENTIFIER'
-            ]):
-                continue
-                
-            # Skip GO statements
-            if line.upper().strip() == 'GO':
                 continue
             
             # Normalize whitespace in SQL statements
@@ -658,7 +655,7 @@ class AzureSQLImporter:
                     if current_batch:
                         batches.append('\n'.join(current_batch))
                         current_batch = []
-                elif line and not line.startswith('--'):
+                elif line and not line.startswith('--') and not line.startswith('/*'):
                     current_batch.append(line)
             
             # Add the last batch if it exists
@@ -1236,20 +1233,27 @@ class AzureSQLImporter:
                     print("=" * 80)
                     
                     # Replace CREATE or ALTER with CREATE OR ALTER
-                    if sql_content.strip().upper().startswith('CREATE '):
-                        modified_sql = sql_content.replace('CREATE ', 'CREATE OR ALTER ', 1)
-                        print(f"🔍 DEBUG: Replaced 'CREATE ' with 'CREATE OR ALTER '")
-                    elif sql_content.strip().upper().startswith('ALTER '):
-                        modified_sql = sql_content.replace('ALTER ', 'CREATE OR ALTER ', 1)
-                        print(f"🔍 DEBUG: Replaced 'ALTER ' with 'CREATE OR ALTER '")
-                    else:
-                        # Fallback: try to find the first occurrence
-                        modified_sql = sql_content.replace('CREATE ', 'CREATE OR ALTER ', 1)
-                        if 'CREATE OR ALTER' not in modified_sql:
-                            modified_sql = sql_content.replace('ALTER ', 'CREATE OR ALTER ', 1)
-                            print(f"🔍 DEBUG: Fallback - Replaced 'ALTER ' with 'CREATE OR ALTER '")
+                    # Handle SSMS headers by finding the actual SQL statement
+                    lines = sql_content.split('\n')
+                    modified_lines = []
+                    replaced = False
+                    
+                    for line in lines:
+                        line_upper = line.strip().upper()
+                        if not replaced and (line_upper.startswith('CREATE ') or line_upper.startswith('ALTER ')):
+                            # Replace the first CREATE or ALTER we find
+                            if line_upper.startswith('CREATE '):
+                                modified_line = line.replace('CREATE ', 'CREATE OR ALTER ', 1)
+                                print(f"🔍 DEBUG: Replaced 'CREATE ' with 'CREATE OR ALTER ' in line: {line.strip()}")
+                            else:
+                                modified_line = line.replace('ALTER ', 'CREATE OR ALTER ', 1)
+                                print(f"🔍 DEBUG: Replaced 'ALTER ' with 'CREATE OR ALTER ' in line: {line.strip()}")
+                            modified_lines.append(modified_line)
+                            replaced = True
                         else:
-                            print(f"🔍 DEBUG: Fallback - Replaced 'CREATE ' with 'CREATE OR ALTER '")
+                            modified_lines.append(line)
+                    
+                    modified_sql = '\n'.join(modified_lines)
                     
                     # Write to temporary file
                     temp_file = file_path.parent / f"temp_{file_path.name}"
