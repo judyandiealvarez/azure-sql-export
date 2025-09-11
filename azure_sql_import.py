@@ -495,6 +495,54 @@ class AzureSQLImporter:
             logger.error(f"Error getting row count for {schema_name}.{table_name}: {e}")
             return 0
     
+    def get_procedure_schema(self, schema_name: str, procedure_name: str) -> str:
+        """Get current procedure schema definition."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{procedure_name}")
+            result = cursor.fetchone()
+            cursor.close()
+            return result[0] if result and result[0] else ""
+        except Exception as e:
+            logger.error(f"Error getting procedure schema for {schema_name}.{procedure_name}: {e}")
+            return ""
+    
+    def get_function_schema(self, schema_name: str, function_name: str) -> str:
+        """Get current function schema definition."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{function_name}")
+            result = cursor.fetchone()
+            cursor.close()
+            return result[0] if result and result[0] else ""
+        except Exception as e:
+            logger.error(f"Error getting function schema for {schema_name}.{function_name}: {e}")
+            return ""
+    
+    def get_view_schema(self, schema_name: str, view_name: str) -> str:
+        """Get current view schema definition."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{view_name}")
+            result = cursor.fetchone()
+            cursor.close()
+            return result[0] if result and result[0] else ""
+        except Exception as e:
+            logger.error(f"Error getting view schema for {schema_name}.{view_name}: {e}")
+            return ""
+    
+    def get_trigger_schema(self, schema_name: str, trigger_name: str) -> str:
+        """Get current trigger schema definition."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT OBJECT_DEFINITION(OBJECT_ID(?))", f"{schema_name}.{trigger_name}")
+            result = cursor.fetchone()
+            cursor.close()
+            return result[0] if result and result[0] else ""
+        except Exception as e:
+            logger.error(f"Error getting trigger schema for {schema_name}.{trigger_name}: {e}")
+            return ""
+    
     def compare_schemas(self, new_schema: str, existing_schema: str, object_name: str) -> List[str]:
         """Compare two schema definitions and return differences."""
         if not existing_schema:
@@ -1040,8 +1088,16 @@ class AzureSQLImporter:
                 
                 if obj_type == 'tables':
                     existing_schema = self.get_table_schema(schema_name, object_name)
+                elif obj_type == 'procedures':
+                    existing_schema = self.get_procedure_schema(schema_name, object_name)
+                elif obj_type == 'functions':
+                    existing_schema = self.get_function_schema(schema_name, object_name)
+                elif obj_type == 'views':
+                    existing_schema = self.get_view_schema(schema_name, object_name)
+                elif obj_type == 'triggers':
+                    existing_schema = self.get_trigger_schema(schema_name, object_name)
                 else:
-                    existing_schema = ""  # For other objects, we'll just show the file content
+                    existing_schema = ""  # Fallback
                 
                 differences = self.compare_schemas(new_schema, existing_schema, full_name)
                 
