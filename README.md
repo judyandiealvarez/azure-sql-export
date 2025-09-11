@@ -203,25 +203,31 @@ exclude_schemas:
 
 ## Output Structure
 
-The script creates the following directory structure:
+The script creates the following directory structure organized by object type:
 
 ```
 export_output/
 ├── schema/
-│   ├── dbo/
-│   │   ├── table1_schema.sql
-│   │   ├── table2_schema.sql
-│   │   ├── view1_view.sql
-│   │   ├── procedure1_procedure.sql
-│   │   └── function1_function.sql
-│   └── schema2/
-│       └── ...
+│   ├── tables/
+│   │   ├── dbo.table1.sql
+│   │   ├── dbo.table2.sql
+│   │   └── schema2.table3.sql
+│   ├── views/
+│   │   ├── dbo.view1.sql
+│   │   └── schema2.view2.sql
+│   ├── procedures/
+│   │   ├── dbo.procedure1.sql
+│   │   └── schema2.procedure2.sql
+│   ├── functions/
+│   │   ├── dbo.function1.sql
+│   │   └── schema2.function2.sql
+│   └── triggers/
+│       ├── dbo.trigger1.sql
+│       └── schema2.trigger2.sql
 ├── data/
-│   ├── dbo/
-│   │   ├── table1_data.sql
-│   │   └── table2_data.sql
-│   └── schema2/
-│       └── ...
+│   ├── dbo.table1.sql
+│   ├── dbo.table2.sql
+│   └── schema2.table3.sql
 └── migration_script.sql
 ```
 
@@ -254,8 +260,8 @@ export_output/
 1. **Run the export script** on your source Azure SQL Database
 2. **Review the generated files** in the output directory
 3. **On your target server**, run the files in this order:
-   - Schema files (tables first, then views, functions, procedures, triggers)
-   - Data files (INSERT statements)
+   - Schema files from `schema/` directory (tables first, then views, functions, procedures, triggers)
+   - Data files from `data/` directory (INSERT statements)
 4. **Use the migration_script.sql** as a reference for the proper order
 
 ## Configuration Options

@@ -335,60 +335,30 @@ class AzureSQLImporter:
             logger.error(f"Schema directory not found: {self.schema_dir}")
             return files
         
-        # Load table schemas
-        for schema_path in self.schema_dir.iterdir():
-            if schema_path.is_dir():
-                for file_path in schema_path.glob("*_schema.sql"):
-                    table_name = file_path.stem.replace("_schema", "")
-                    files['tables'].append({
-                        'schema': schema_path.name,
-                        'name': table_name,
-                        'file': file_path
-                    })
+        # Define type directories mapping
+        type_dirs = {
+            'tables': self.schema_dir / 'tables',
+            'views': self.schema_dir / 'views',
+            'procedures': self.schema_dir / 'procedures',
+            'functions': self.schema_dir / 'functions',
+            'triggers': self.schema_dir / 'triggers'
+        }
         
-        # Load views
-        for schema_path in self.schema_dir.iterdir():
-            if schema_path.is_dir():
-                for file_path in schema_path.glob("*_view.sql"):
-                    view_name = file_path.stem.replace("_view", "")
-                    files['views'].append({
-                        'schema': schema_path.name,
-                        'name': view_name,
-                        'file': file_path
-                    })
-        
-        # Load procedures
-        for schema_path in self.schema_dir.iterdir():
-            if schema_path.is_dir():
-                for file_path in schema_path.glob("*_procedure.sql"):
-                    proc_name = file_path.stem.replace("_procedure", "")
-                    files['procedures'].append({
-                        'schema': schema_path.name,
-                        'name': proc_name,
-                        'file': file_path
-                    })
-        
-        # Load functions
-        for schema_path in self.schema_dir.iterdir():
-            if schema_path.is_dir():
-                for file_path in schema_path.glob("*_function.sql"):
-                    func_name = file_path.stem.replace("_function", "")
-                    files['functions'].append({
-                        'schema': schema_path.name,
-                        'name': func_name,
-                        'file': file_path
-                    })
-        
-        # Load triggers
-        for schema_path in self.schema_dir.iterdir():
-            if schema_path.is_dir():
-                for file_path in schema_path.glob("*_trigger.sql"):
-                    trigger_name = file_path.stem.replace("_trigger", "")
-                    files['triggers'].append({
-                        'schema': schema_path.name,
-                        'name': trigger_name,
-                        'file': file_path
-                    })
+        # Load files from each type directory
+        for obj_type, type_dir in type_dirs.items():
+            if type_dir.exists():
+                for file_path in type_dir.glob("*.sql"):
+                    # Parse filename: schema.object.sql
+                    filename = file_path.stem
+                    if '.' in filename:
+                        schema_name, object_name = filename.split('.', 1)
+                        files[obj_type].append({
+                            'schema': schema_name,
+                            'name': object_name,
+                            'file': file_path
+                        })
+                    else:
+                        logger.warning(f"Unexpected filename format: {file_path}")
         
         logger.info(f"Loaded exported files: {sum(len(v) for v in files.values())} total")
         return files
@@ -570,7 +540,7 @@ class AzureSQLImporter:
         for table_obj in exported_files['tables']:
             schema_name = table_obj['schema']
             table_name = table_obj['name']
-            data_file = self.data_dir / schema_name / f"{table_name}_data.sql"
+            data_file = self.data_dir / f"{schema_name}.{table_name}.sql"
             
             if data_file.exists():
                 if not self.ask_confirmation(f"Import data for table {schema_name}.{table_name}?"):

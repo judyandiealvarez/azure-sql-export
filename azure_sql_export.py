@@ -47,11 +47,21 @@ class AzureSQLExporter:
         self.output_dir = Path(self.config.get('output_directory', 'export_output'))
         self.output_dir.mkdir(exist_ok=True)
         
-        # Create subdirectories
+        # Create subdirectories organized by object type
         self.schema_dir = self.output_dir / 'schema'
         self.data_dir = self.output_dir / 'data'
         self.schema_dir.mkdir(exist_ok=True)
         self.data_dir.mkdir(exist_ok=True)
+        
+        # Create type-specific directories
+        self.tables_dir = self.schema_dir / 'tables'
+        self.views_dir = self.schema_dir / 'views'
+        self.procedures_dir = self.schema_dir / 'procedures'
+        self.functions_dir = self.schema_dir / 'functions'
+        self.triggers_dir = self.schema_dir / 'triggers'
+        
+        for dir_path in [self.tables_dir, self.views_dir, self.procedures_dir, self.functions_dir, self.triggers_dir]:
+            dir_path.mkdir(exist_ok=True)
         
     def _load_config(self, config_file: str) -> Dict:
         """Load configuration from YAML or JSON file."""
@@ -410,13 +420,9 @@ class AzureSQLExporter:
             schema_name = table['schema']
             table_name = table['name']
             
-            # Create schema directory if it doesn't exist
-            schema_path = self.schema_dir / schema_name
-            schema_path.mkdir(exist_ok=True)
-            
             # Export table schema
             table_schema = self.export_table_schema(table)
-            schema_file = schema_path / f"{table_name}_schema.sql"
+            schema_file = self.tables_dir / f"{schema_name}.{table_name}.sql"
             
             with open(schema_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Table schema for {schema_name}.{table_name}\n")
@@ -430,9 +436,6 @@ class AzureSQLExporter:
             schema_name = view['schema']
             view_name = view['name']
             
-            schema_path = self.schema_dir / schema_name
-            schema_path.mkdir(exist_ok=True)
-            
             try:
                 cursor = self.connection.cursor()
                 cursor.execute(f"""
@@ -444,7 +447,7 @@ class AzureSQLExporter:
                 view_definition = cursor.fetchone()[0]
                 cursor.close()
                 
-                view_file = schema_path / f"{view_name}_view.sql"
+                view_file = self.views_dir / f"{schema_name}.{view_name}.sql"
                 with open(view_file, 'w', encoding='utf-8') as f:
                     f.write(f"-- View definition for {schema_name}.{view_name}\n")
                     f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -460,10 +463,7 @@ class AzureSQLExporter:
             schema_name = proc['schema']
             proc_name = proc['name']
             
-            schema_path = self.schema_dir / schema_name
-            schema_path.mkdir(exist_ok=True)
-            
-            proc_file = schema_path / f"{proc_name}_procedure.sql"
+            proc_file = self.procedures_dir / f"{schema_name}.{proc_name}.sql"
             with open(proc_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Stored procedure: {schema_name}.{proc_name}\n")
                 f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -476,10 +476,7 @@ class AzureSQLExporter:
             schema_name = func['schema']
             func_name = func['name']
             
-            schema_path = self.schema_dir / schema_name
-            schema_path.mkdir(exist_ok=True)
-            
-            func_file = schema_path / f"{func_name}_function.sql"
+            func_file = self.functions_dir / f"{schema_name}.{func_name}.sql"
             with open(func_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Function: {schema_name}.{func_name}\n")
                 f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -492,10 +489,7 @@ class AzureSQLExporter:
             schema_name = trigger['schema']
             trigger_name = trigger['name']
             
-            schema_path = self.schema_dir / schema_name
-            schema_path.mkdir(exist_ok=True)
-            
-            trigger_file = schema_path / f"{trigger_name}_trigger.sql"
+            trigger_file = self.triggers_dir / f"{schema_name}.{trigger_name}.sql"
             with open(trigger_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Trigger: {schema_name}.{trigger_name}\n")
                 f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -514,13 +508,9 @@ class AzureSQLExporter:
             schema_name = table['schema']
             table_name = table['name']
             
-            # Create schema directory if it doesn't exist
-            schema_path = self.data_dir / schema_name
-            schema_path.mkdir(exist_ok=True)
-            
             # Export table data
             table_data = self.export_table_data(table)
-            data_file = schema_path / f"{table_name}_data.sql"
+            data_file = self.data_dir / f"{schema_name}.{table_name}.sql"
             
             with open(data_file, 'w', encoding='utf-8') as f:
                 f.write(f"-- Table data for {schema_name}.{table_name}\n")
