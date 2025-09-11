@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Import Database - Azure SQL Database Tools{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-upload text-success me-2"></i>Import Database</h2>
+        <p class="text-muted">Import exported database objects and data into a target Azure SQL Database.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-cog me-2"></i>Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="importForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="configFile" class="form-label">Import Configuration File</label>
+                        <div class="file-upload-area">
+                            <input type="file" class="form-control" id="configFile" name="config_file" accept=".yaml,.yml,.json" required>
+                            <div class="file-list mt-2"></div>
+                            <p class="text-muted mt-2 mb-0">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Upload a YAML or JSON configuration file with your target database connection details.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="importFiles" class="form-label">Exported Files</label>
+                        <div class="file-upload-area">
+                            <input type="file" class="form-control" id="importFiles" name="import_files" multiple accept=".sql,.zip" required>
+                            <div class="file-list mt-2"></div>
+                            <p class="text-muted mt-2 mb-0">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Upload exported SQL files or a ZIP archive containing the exported database files.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg" id="importBtn">
+                            <i class="fas fa-upload me-2"></i>Start Import
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Import Features
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>Smart Import Features:</h6>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-brain text-primary me-2"></i>Dependency analysis</li>
+                    <li><i class="fas fa-balance-scale text-info me-2"></i>Schema comparison</li>
+                    <li><i class="fas fa-cog text-success me-2"></i>Smart ALTER logic</li>
+                    <li><i class="fas fa-skip-forward text-warning me-2"></i>Auto-skip identical</li>
+                </ul>
+                
+                <h6 class="mt-3">Import Options:</h6>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-question-circle me-2"></i>Interactive prompts</li>
+                    <li><i class="fas fa-trash me-2"></i>Truncate tables</li>
+                    <li><i class="fas fa-plus me-2"></i>Append data</li>
+                    <li><i class="fas fa-edit me-2"></i>Alter existing objects</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-download me-2"></i>Example Config
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">Download example import configuration:</p>
+                <div class="d-grid">
+                    <a href="{{ url_for('static', filename='config.import.example.yaml') }}" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-download me-1"></i>Import Config
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Modal -->
+<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-upload me-2"></i>Import in Progress
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                             role="progressbar" style="width: 0%" id="progressBar"></div>
+                    </div>
+                    <div class="text-center mt-2">
+                        <span id="progressText">Starting import...</span>
+                    </div>
+                </div>
+                
+                <div id="operationLog" class="bg-light p-3 rounded" style="height: 200px; overflow-y: auto;">
+                    <div class="text-muted">Waiting for operation to start...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeBtn" disabled>
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('importForm');
+    const importBtn = document.getElementById('importBtn');
+    const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const operationLog = document.getElementById('operationLog');
+    const closeBtn = document.getElementById('closeBtn');
+    
+    let operationId = null;
+    let statusInterval = null;
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(form);
+        
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Starting...';
+        
+        fetch('/api/import', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            operationId = data.operation_id;
+            progressModal.show();
+            startStatusPolling();
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+            importBtn.disabled = false;
+            importBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Start Import';
+        });
+    });
+    
+    function startStatusPolling() {
+        statusInterval = setInterval(() => {
+            fetch(`/api/status/${operationId}`)
+            .then(response => response.json())
+            .then(data => {
+                updateProgress(data);
+                
+                if (data.status === 'completed' || data.status === 'error') {
+                    clearInterval(statusInterval);
+                    importBtn.disabled = false;
+                    importBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Start Import';
+                    closeBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Status polling error:', error);
+            });
+        }, 1000);
+    }
+    
+    function updateProgress(data) {
+        progressBar.style.width = data.progress + '%';
+        progressText.textContent = data.message;
+        
+        // Add log entry
+        const logEntry = document.createElement('div');
+        logEntry.className = 'mb-1';
+        logEntry.innerHTML = `<small class="text-muted">${new Date().toLocaleTimeString()}</small> ${data.message}`;
+        operationLog.appendChild(logEntry);
+        operationLog.scrollTop = operationLog.scrollHeight;
+        
+        // Clear old entries if too many
+        while (operationLog.children.length > 50) {
+            operationLog.removeChild(operationLog.firstChild);
+        }
+    }
+    
+    // Reset form when modal is closed
+    document.getElementById('progressModal').addEventListener('hidden.bs.modal', function() {
+        if (statusInterval) {
+            clearInterval(statusInterval);
+        }
+        form.reset();
+        document.querySelectorAll('.file-list').forEach(list => list.innerHTML = '');
+        progressBar.style.width = '0%';
+        progressText.textContent = 'Starting import...';
+        operationLog.innerHTML = '<div class="text-muted">Waiting for operation to start...</div>';
+        closeBtn.disabled = true;
+    });
+});
+</script>
+{% endblock %}

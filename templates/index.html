@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Azure SQL Database Tools{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-primary text-white p-5 rounded mb-4">
+            <h1 class="display-4">
+                <i class="fas fa-database me-3"></i>Azure SQL Database Tools
+            </h1>
+            <p class="lead">Comprehensive tools for exporting, importing, and comparing Azure SQL Database schemas and data.</p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-download text-primary me-2"></i>Export Database
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">Export your Azure SQL Database schema objects and table data to SQL files for backup, migration, or analysis.</p>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success me-2"></i>Tables, Views, Procedures</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Functions, Triggers</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Table data (SQL or Binary)</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Schema filtering</li>
+                </ul>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('export_page') }}" class="btn btn-primary">
+                    <i class="fas fa-download me-2"></i>Start Export
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-upload text-success me-2"></i>Import Database
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">Import exported database objects and data into a target Azure SQL Database with smart conflict resolution.</p>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success me-2"></i>Interactive mode</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Schema comparison</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Smart ALTER logic</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Dependency analysis</li>
+                </ul>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('import_page') }}" class="btn btn-success">
+                    <i class="fas fa-upload me-2"></i>Start Import
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-balance-scale text-info me-2"></i>Compare Database
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">Compare exported database files with a target database to identify differences without making changes.</p>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success me-2"></i>Schema comparison</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Data comparison</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Detailed reports</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Export results</li>
+                </ul>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('compare_page') }}" class="btn btn-info">
+                    <i class="fas fa-balance-scale me-2"></i>Start Compare
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle text-primary me-2"></i>Features Overview
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-cog text-primary me-2"></i>Configuration</h6>
+                        <ul>
+                            <li>YAML and JSON configuration files</li>
+                            <li>SQL Server and Azure AD authentication</li>
+                            <li>Schema filtering (include/exclude)</li>
+                            <li>Binary data export/import for performance</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-shield-alt text-success me-2"></i>Safety Features</h6>
+                        <ul>
+                            <li>Interactive confirmation prompts</li>
+                            <li>Schema comparison before changes</li>
+                            <li>Rollback capabilities</li>
+                            <li>Detailed logging and error handling</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-tachometer-alt text-info me-2"></i>Performance</h6>
+                        <ul>
+                            <li>Batch processing for large datasets</li>
+                            <li>Progress tracking with ETA</li>
+                            <li>Configurable reporting intervals</li>
+                            <li>Binary data compression</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-brain text-warning me-2"></i>Intelligence</h6>
+                        <ul>
+                            <li>Dependency analysis and ordering</li>
+                            <li>Smart schema comparison</li>
+                            <li>Auto-skip identical objects</li>
+                            <li>Proper ALTER statement generation</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

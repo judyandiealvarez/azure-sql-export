@@ -36,6 +36,16 @@ Python scripts to export, import, and compare Azure SQL Database schema objects 
 - **Export Reports**: Generate detailed comparison reports
 - **Safe Analysis**: Read-only comparison without making changes
 
+### Web Interface (`azure_sql_web.py`)
+- **Modern Web UI**: Clean, responsive interface built with Bootstrap
+- **File Upload**: Drag-and-drop file upload for configurations and exports
+- **Real-time Progress**: Live progress tracking with detailed operation logs
+- **Background Processing**: Long-running operations run in background threads
+- **Download Results**: Download export results as ZIP files
+- **Interactive Results**: View comparison results in detailed tables
+- **Configuration Examples**: Download example configuration files
+- **Cross-platform**: Works on any system with a web browser
+
 ## Prerequisites
 
 - Python 3.7+
@@ -49,6 +59,50 @@ Python scripts to export, import, and compare Azure SQL Database schema objects 
    ```bash
    pip install -r requirements.txt
    ```
+
+## Usage
+
+### Command Line Interface
+
+1. **Configure your database connection:**
+   ```bash
+   cp config.example.yaml config.yaml
+   # Edit config.yaml with your database details
+   ```
+
+2. **Export your database:**
+   ```bash
+   python azure_sql_export.py
+   ```
+
+3. **Import to another database:**
+   ```bash
+   python azure_sql_import.py
+   ```
+
+4. **Compare databases:**
+   ```bash
+   python azure_sql_compare.py
+   ```
+
+### Web Interface
+
+1. **Start the web server:**
+   ```bash
+   python start_web.py
+   ```
+
+2. **Open your browser:**
+   ```
+   http://localhost:5000
+   ```
+
+3. **Use the web interface:**
+   - **Export**: Upload configuration file and start export
+   - **Import**: Upload configuration and exported files
+   - **Compare**: Upload configuration and files to compare
+   - **Monitor**: Watch real-time progress and logs
+   - **Download**: Get results as ZIP files
 
 ## Configuration
 

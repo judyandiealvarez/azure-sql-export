@@ -1,0 +1,27 @@
+# Azure SQL Database Export Configuration - Azure AD Authentication
+# Copy this file to config.yaml and update with your settings
+
+# Database connection settings
+server: "your-server.database.windows.net"
+database: "your-database-name"
+
+# Authentication type: "sql" or "azure_ad"
+authentication_type: "azure_ad"
+
+# ODBC driver name
+driver: "ODBC Driver 17 for SQL Server"
+
+# Output settings
+output_directory: "export_output"
+export_data: true
+batch_size: 1000
+data_format: "sql"  # "sql" or "binary"
+reporting_interval: 1000  # Report progress every N batches (default: 1000)
+
+# Schema filtering
+# Leave include_schemas empty to include all schemas
+# Leave exclude_schemas empty to exclude none
+include_schemas: []
+exclude_schemas:
+  - "sys"
+  - "INFORMATION_SCHEMA"
