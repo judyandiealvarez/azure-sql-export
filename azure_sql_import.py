@@ -231,6 +231,11 @@ class AzureSQLImporter:
         if not sql_text:
             return ""
         
+        # First, remove multi-line comments (/* ... */)
+        # This handles comments that span multiple lines
+        import re
+        sql_text = re.sub(r'/\*.*?\*/', '', sql_text, flags=re.DOTALL)
+        
         lines = sql_text.split('\n')
         normalized_lines = []
         

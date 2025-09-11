@@ -297,6 +297,7 @@ The comparison tools now intelligently ignore cosmetic differences that don't af
 **Ignored Differences:**
 - **Generation Comments**: `-- Generated on 2025-09-11 21:37:29`
 - **Script Headers**: `-- Table schema for...`, `-- Object: Table...`
+- **Multi-line Comments**: `/* Object: StoredProcedure [schema].[name] */`
 - **SET Statements**: `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`
 - **GO Statements**: Batch separators
 - **Whitespace**: Extra spaces, tabs, blank lines
@@ -305,6 +306,22 @@ The comparison tools now intelligently ignore cosmetic differences that don't af
 **Example:**
 ```sql
 -- These are considered IDENTICAL despite cosmetic differences:
+
+-- File 1:
+/* Object: StoredProcedure [dbo].[sp_GetUser] */
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[sp_GetUser] @UserId int AS BEGIN SELECT * FROM Users WHERE Id = @UserId END
+
+-- File 2:
+/* Object: StoredProcedure [dbo].[sp_GetUser] - Generated on 2025-09-11 */
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[sp_GetUser] @UserId int AS BEGIN SELECT * FROM Users WHERE Id = @UserId END
 
 -- Version 1:
 -- Generated on 2025-09-11 21:37:29
