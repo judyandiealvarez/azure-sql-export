@@ -5,5 +5,7 @@
   "driver": "ODBC Driver 17 for SQL Server",
   "output_directory": "export_output",
   "export_data": true,
-  "batch_size": 1000
+  "batch_size": 1000,
+  "include_schemas": [],
+  "exclude_schemas": ["sys", "INFORMATION_SCHEMA"]
 }

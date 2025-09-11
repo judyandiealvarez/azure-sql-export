@@ -117,61 +117,107 @@ class AzureSQLExporter:
             'indexes': []
         }
         
+        # Get schema filter configuration
+        include_schemas = self.config.get('include_schemas', [])
+        exclude_schemas = self.config.get('exclude_schemas', ['sys', 'INFORMATION_SCHEMA'])
+        
+        # Build schema filter condition
+        schema_filter = ""
+        if include_schemas:
+            placeholders = ",".join(["?" for _ in include_schemas])
+            schema_filter = f"AND TABLE_SCHEMA IN ({placeholders})"
+        elif exclude_schemas:
+            placeholders = ",".join(["?" for _ in exclude_schemas])
+            schema_filter = f"AND TABLE_SCHEMA NOT IN ({placeholders})"
+        
         try:
             cursor = self.connection.cursor()
             
             # Get tables
-            cursor.execute("""
+            query = f"""
                 SELECT 
                     TABLE_SCHEMA,
                     TABLE_NAME,
                     TABLE_TYPE
                 FROM INFORMATION_SCHEMA.TABLES
                 WHERE TABLE_TYPE = 'BASE TABLE'
+                {schema_filter}
                 ORDER BY TABLE_SCHEMA, TABLE_NAME
-            """)
+            """
+            
+            if include_schemas:
+                cursor.execute(query, include_schemas)
+            elif exclude_schemas:
+                cursor.execute(query, exclude_schemas)
+            else:
+                cursor.execute(query)
+                
             objects['tables'] = [{'schema': row[0], 'name': row[1], 'type': row[2]} 
                                for row in cursor.fetchall()]
             
             # Get views
-            cursor.execute("""
+            query = f"""
                 SELECT 
                     TABLE_SCHEMA,
                     TABLE_NAME
                 FROM INFORMATION_SCHEMA.VIEWS
+                WHERE 1=1 {schema_filter.replace('TABLE_SCHEMA', 'TABLE_SCHEMA')}
                 ORDER BY TABLE_SCHEMA, TABLE_NAME
-            """)
+            """
+            
+            if include_schemas:
+                cursor.execute(query, include_schemas)
+            elif exclude_schemas:
+                cursor.execute(query, exclude_schemas)
+            else:
+                cursor.execute(query)
             objects['views'] = [{'schema': row[0], 'name': row[1]} 
                               for row in cursor.fetchall()]
             
             # Get stored procedures
-            cursor.execute("""
+            query = f"""
                 SELECT 
                     ROUTINE_SCHEMA,
                     ROUTINE_NAME,
                     ROUTINE_DEFINITION
                 FROM INFORMATION_SCHEMA.ROUTINES
                 WHERE ROUTINE_TYPE = 'PROCEDURE'
+                {schema_filter.replace('TABLE_SCHEMA', 'ROUTINE_SCHEMA')}
                 ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME
-            """)
+            """
+            
+            if include_schemas:
+                cursor.execute(query, include_schemas)
+            elif exclude_schemas:
+                cursor.execute(query, exclude_schemas)
+            else:
+                cursor.execute(query)
             objects['stored_procedures'] = [{'schema': row[0], 'name': row[1], 'definition': row[2]} 
                                           for row in cursor.fetchall()]
             
             # Get functions
-            cursor.execute("""
+            query = f"""
                 SELECT 
                     ROUTINE_SCHEMA,
                     ROUTINE_NAME,
                     ROUTINE_DEFINITION
                 FROM INFORMATION_SCHEMA.ROUTINES
                 WHERE ROUTINE_TYPE = 'FUNCTION'
+                {schema_filter.replace('TABLE_SCHEMA', 'ROUTINE_SCHEMA')}
                 ORDER BY ROUTINE_SCHEMA, ROUTINE_NAME
-            """)
+            """
+            
+            if include_schemas:
+                cursor.execute(query, include_schemas)
+            elif exclude_schemas:
+                cursor.execute(query, exclude_schemas)
+            else:
+                cursor.execute(query)
             objects['functions'] = [{'schema': row[0], 'name': row[1], 'definition': row[2]} 
                                   for row in cursor.fetchall()]
             
             # Get triggers
-            cursor.execute("""
+            query = f"""
                 SELECT 
                     TRIGGER_SCHEMA,
                     TRIGGER_NAME,
@@ -179,8 +225,16 @@ class AzureSQLExporter:
                     EVENT_OBJECT_TABLE,
                     ACTION_STATEMENT
                 FROM INFORMATION_SCHEMA.TRIGGERS
+                WHERE 1=1 {schema_filter.replace('TABLE_SCHEMA', 'TRIGGER_SCHEMA')}
                 ORDER BY TRIGGER_SCHEMA, TRIGGER_NAME
-            """)
+            """
+            
+            if include_schemas:
+                cursor.execute(query, include_schemas)
+            elif exclude_schemas:
+                cursor.execute(query, exclude_schemas)
+            else:
+                cursor.execute(query)
             objects['triggers'] = [{'schema': row[0], 'name': row[1], 'event': row[2], 
                                   'table': row[3], 'statement': row[4]} 
                                  for row in cursor.fetchall()]

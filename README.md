@@ -77,6 +77,24 @@ python azure_sql_export.py --config my_config.json --output /path/to/output
 ### Schema Only (No Data)
 Edit your config file and set `"export_data": false`
 
+### Export Specific Schemas Only
+To export only specific schemas (e.g., only 'dbo' and 'custom_schema'):
+```json
+{
+  "include_schemas": ["dbo", "custom_schema"],
+  "exclude_schemas": []
+}
+```
+
+### Exclude System Schemas
+To exclude system schemas (default behavior):
+```json
+{
+  "include_schemas": [],
+  "exclude_schemas": ["sys", "INFORMATION_SCHEMA", "guest"]
+}
+```
+
 ## Output Structure
 
 The script creates the following directory structure:
@@ -123,6 +141,8 @@ export_output/
 | `output_directory` | Output directory path | "export_output" |
 | `export_data` | Whether to export table data | true |
 | `batch_size` | Number of rows per batch | 1000 |
+| `include_schemas` | List of schemas to include (empty = all) | [] |
+| `exclude_schemas` | List of schemas to exclude | ["sys", "INFORMATION_SCHEMA"] |
 
 ## Troubleshooting
 
