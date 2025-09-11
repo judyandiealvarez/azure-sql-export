@@ -1265,6 +1265,10 @@ class AzureSQLImporter:
                         total_processed += 1
                         logger.info(f"Successfully created or altered {description}")
                         
+                        # Wait a moment for database to commit changes
+                        import time
+                        time.sleep(0.5)
+                        
                         # Debug: Check what the procedure looks like after update
                         print(f"\n🔍 DEBUG: Checking procedure after update...")
                         updated_schema = self.get_procedure_schema(schema_name, object_name)
@@ -1273,6 +1277,21 @@ class AzureSQLImporter:
                         print(updated_schema)
                         print("=" * 80)
                         
+                        # Check if the procedure was actually updated
+                        if updated_schema == existing_schema:
+                            print(f"⚠️  WARNING: Procedure schema is identical to before update!")
+                            print(f"This suggests the CREATE OR ALTER didn't actually change anything.")
+                            
+                            # Check if the new schema is also identical to existing
+                            if new_schema == existing_schema:
+                                print(f"🔍 DEBUG: New schema is identical to existing schema!")
+                                print(f"This means there was no actual difference to update.")
+                            else:
+                                print(f"🔍 DEBUG: New schema is different from existing, but update didn't change it.")
+                                print(f"This suggests CREATE OR ALTER might not be working as expected.")
+                        else:
+                            print(f"✅ Procedure schema was updated successfully")
+                        
                         # Compare again to see if they're now identical
                         print(f"\n🔍 DEBUG: Re-comparing after update...")
                         new_normalized = self._normalize_sql(new_schema)
@@ -1280,6 +1299,16 @@ class AzureSQLImporter:
                         print(f"New normalized: {new_normalized}")
                         print(f"Updated normalized: {updated_normalized}")
                         print(f"Are they identical? {new_normalized == updated_normalized}")
+                        
+                        # If still not identical, show the differences
+                        if new_normalized != updated_normalized:
+                            print(f"\n🔍 DEBUG: Still different after update. Differences:")
+                            diff = list(unified_diff(
+                                updated_normalized.split('\n'), new_normalized.split('\n'),
+                                fromfile="Updated", tofile="New", lineterm=""
+                            ))
+                            for line in diff:
+                                print(line)
                         
                     else:
                         logger.error(f"Failed to create or alter {description}")
