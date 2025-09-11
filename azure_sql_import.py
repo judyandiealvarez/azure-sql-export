@@ -652,7 +652,9 @@ class AzureSQLImporter:
                         
                         # Add new default constraint if specified
                         if new_col_parts['default']:
-                            alter_statements.append(f"ALTER TABLE [{schema_name}].[{table_name}] ADD CONSTRAINT [DF_{table_name}_{col_name}] DEFAULT {new_col_parts['default']} FOR [{col_name}]")
+                            # Extract just the value part from DEFAULT (value)
+                            default_value = new_col_parts['default'].replace('DEFAULT', '').strip()
+                            alter_statements.append(f"ALTER TABLE [{schema_name}].[{table_name}] ADD CONSTRAINT [DF_{table_name}_{col_name}] DEFAULT {default_value} FOR [{col_name}]")
             
             # Find dropped columns (be careful with this)
             for col_name in existing_columns:
