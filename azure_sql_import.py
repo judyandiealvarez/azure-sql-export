@@ -1099,6 +1099,10 @@ class AzureSQLImporter:
                     existing_schema = self.get_table_schema(schema_name, object_name)
                 elif obj_type == 'procedures':
                     existing_schema = self.get_procedure_schema(schema_name, object_name)
+                    print(f"\n🔍 DEBUG: Existing procedure schema for {full_name}:")
+                    print("=" * 80)
+                    print(existing_schema)
+                    print("=" * 80)
                 elif obj_type == 'functions':
                     existing_schema = self.get_function_schema(schema_name, object_name)
                 elif obj_type == 'views':
@@ -1109,6 +1113,17 @@ class AzureSQLImporter:
                     existing_schema = ""  # Fallback
                 
                 differences = self.compare_schemas(new_schema, existing_schema, full_name)
+                
+                # Debug: Show normalized versions for comparison
+                if obj_type == 'procedures':
+                    new_normalized = self._normalize_sql(new_schema)
+                    existing_normalized = self._normalize_sql(existing_schema)
+                    print(f"\n🔍 DEBUG: Normalized comparison for {full_name}:")
+                    print("New normalized:")
+                    print(new_normalized)
+                    print("Existing normalized:")
+                    print(existing_normalized)
+                    print(f"Are they identical? {new_normalized == existing_normalized}")
                 
                 # Check if there are no real differences
                 if len(differences) == 1 and "No differences found" in differences[0]:
@@ -1223,9 +1238,49 @@ class AzureSQLImporter:
                     success = self.execute_sql_file(temp_file, description)
                     temp_file.unlink()  # Clean up temp file
                     
+                    # If CREATE OR ALTER failed, try DROP + CREATE
+                    if not success:
+                        print(f"\n🔍 DEBUG: CREATE OR ALTER failed, trying DROP + CREATE...")
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            original_sql = f.read()
+                        
+                        # Generate DROP + CREATE statements
+                        drop_sql = f"DROP PROCEDURE IF EXISTS [{schema_name}].[{object_name}];\n"
+                        combined_sql = drop_sql + original_sql
+                        
+                        # Write to temporary file
+                        temp_file2 = file_path.parent / f"temp2_{file_path.name}"
+                        with open(temp_file2, 'w', encoding='utf-8') as f:
+                            f.write(combined_sql)
+                        
+                        print(f"🔍 DEBUG: Trying DROP + CREATE approach:")
+                        print("=" * 80)
+                        print(combined_sql)
+                        print("=" * 80)
+                        
+                        success = self.execute_sql_file(temp_file2, description)
+                        temp_file2.unlink()  # Clean up temp file
+                    
                     if success:
                         total_processed += 1
                         logger.info(f"Successfully created or altered {description}")
+                        
+                        # Debug: Check what the procedure looks like after update
+                        print(f"\n🔍 DEBUG: Checking procedure after update...")
+                        updated_schema = self.get_procedure_schema(schema_name, object_name)
+                        print(f"Updated procedure schema:")
+                        print("=" * 80)
+                        print(updated_schema)
+                        print("=" * 80)
+                        
+                        # Compare again to see if they're now identical
+                        print(f"\n🔍 DEBUG: Re-comparing after update...")
+                        new_normalized = self._normalize_sql(new_schema)
+                        updated_normalized = self._normalize_sql(updated_schema)
+                        print(f"New normalized: {new_normalized}")
+                        print(f"Updated normalized: {updated_normalized}")
+                        print(f"Are they identical? {new_normalized == updated_normalized}")
+                        
                     else:
                         logger.error(f"Failed to create or alter {description}")
                 elif exists and obj_type == 'triggers':
