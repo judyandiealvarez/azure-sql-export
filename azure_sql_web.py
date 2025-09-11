@@ -21,7 +21,7 @@ import shutil
 # Import our existing modules
 from azure_sql_export import AzureSQLExporter
 from azure_sql_import import AzureSQLImporter
-from azure_sql_compare import AzureSQLComparer
+from azure_sql_compare import DatabaseComparator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -163,7 +163,7 @@ def run_compare_operation(operation_id, config_path, import_dir):
             return
         
         # Create comparer
-        comparer = AzureSQLComparer(config, import_dir)
+        comparer = DatabaseComparator(config, import_dir)
         
         if not comparer.connect():
             operation_status[operation_id] = {'status': 'error', 'message': 'Failed to connect to database'}
