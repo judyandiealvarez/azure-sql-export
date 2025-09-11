@@ -21,7 +21,8 @@ import logging
 import argparse
 import pickle
 import gzip
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 import pyodbc
 import pandas as pd
@@ -407,6 +408,7 @@ class AzureSQLExporter:
             batch_size = self.config.get('batch_size', 1000)
             reporting_interval = self.config.get('reporting_interval', 1000)  # Report every N batches
             insert_statements = []
+            start_time = time.time()
             
             for offset in range(0, row_count, batch_size):
                 cursor.execute(f"""
@@ -421,7 +423,18 @@ class AzureSQLExporter:
                 # Only log every N batches to avoid slowing down export
                 batch_num = offset//batch_size + 1
                 if batch_num % reporting_interval == 0 or batch_num == (row_count-1)//batch_size + 1:
-                    logger.info(f"Processed batch {batch_num} for {full_table_name} ({offset + len(rows)}/{row_count} rows)")
+                    # Calculate ETA
+                    elapsed_time = time.time() - start_time
+                    processed_rows = offset + len(rows)
+                    if processed_rows > 0 and elapsed_time > 0:
+                        rows_per_second = processed_rows / elapsed_time
+                        remaining_rows = row_count - processed_rows
+                        eta_seconds = remaining_rows / rows_per_second if rows_per_second > 0 else 0
+                        eta = datetime.now() + timedelta(seconds=eta_seconds)
+                        eta_str = eta.strftime("%H:%M:%S")
+                        logger.info(f"Processed batch {batch_num} for {full_table_name} ({processed_rows}/{row_count} rows) - ETA: {eta_str}")
+                    else:
+                        logger.info(f"Processed batch {batch_num} for {full_table_name} ({processed_rows}/{row_count} rows)")
                 
                 for row in rows:
                     values = []
@@ -481,6 +494,7 @@ class AzureSQLExporter:
             batch_size = self.config.get('batch_size', 10000)  # Larger batches for binary
             reporting_interval = self.config.get('reporting_interval', 1000)  # Report every N batches
             all_data = []
+            start_time = time.time()
             
             for offset in range(0, row_count, batch_size):
                 cursor.execute(f"""
@@ -496,7 +510,18 @@ class AzureSQLExporter:
                 # Only log every N batches to avoid slowing down export
                 batch_num = offset//batch_size + 1
                 if batch_num % reporting_interval == 0 or batch_num == (row_count-1)//batch_size + 1:
-                    logger.info(f"Processed batch {batch_num} for {full_table_name} ({len(all_data)}/{row_count} rows)")
+                    # Calculate ETA
+                    elapsed_time = time.time() - start_time
+                    processed_rows = len(all_data)
+                    if processed_rows > 0 and elapsed_time > 0:
+                        rows_per_second = processed_rows / elapsed_time
+                        remaining_rows = row_count - processed_rows
+                        eta_seconds = remaining_rows / rows_per_second if rows_per_second > 0 else 0
+                        eta = datetime.now() + timedelta(seconds=eta_seconds)
+                        eta_str = eta.strftime("%H:%M:%S")
+                        logger.info(f"Processed batch {batch_num} for {full_table_name} ({processed_rows}/{row_count} rows) - ETA: {eta_str}")
+                    else:
+                        logger.info(f"Processed batch {batch_num} for {full_table_name} ({processed_rows}/{row_count} rows)")
             
             cursor.close()
             

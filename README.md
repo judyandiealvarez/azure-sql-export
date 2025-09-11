@@ -253,6 +253,7 @@ reporting_interval: 1000   # Report progress every N batches (default: 1000)
 - **Preserves Data Types**: No string conversion issues
 - **Large Dataset Support**: Handles millions of rows efficiently
 - **Optimized Logging**: Configurable reporting to avoid performance impact
+- **ETA Tracking**: Real-time estimated completion time
 
 #### Performance Optimization
 For maximum performance with large datasets:
@@ -268,6 +269,24 @@ reporting_interval: 10000   # Report every 10,000 batches (less frequent logging
 - **Larger Batches**: Increase `batch_size` for better throughput
 - **Less Frequent Logging**: Increase `reporting_interval` to reduce I/O overhead
 - **System Resources**: More RAM allows larger batch sizes
+- **ETA Monitoring**: Real-time completion estimates help plan operations
+
+#### ETA (Estimated Time of Arrival)
+The scripts now include real-time ETA calculations for better progress tracking:
+
+**Example Output:**
+```
+Processed batch 1000 for dbo.large_table (10000000/50000000 rows) - ETA: 14:35:22
+Processed batch 2000 for dbo.large_table (20000000/50000000 rows) - ETA: 14:32:15
+Processed batch 5000 for dbo.large_table (50000000/50000000 rows)
+```
+
+**ETA Features:**
+- **Real-time Calculation**: Based on current processing speed
+- **Accurate Estimates**: Improves as more data is processed
+- **Time Format**: Shows completion time in HH:MM:SS format
+- **Export & Import**: Works for both operations
+- **SQL & Binary**: Available for both data formats
 
 ### Exclude System Schemas
 To exclude system schemas (default behavior):
