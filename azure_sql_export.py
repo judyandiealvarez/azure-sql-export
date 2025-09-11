@@ -228,16 +228,10 @@ class AzureSQLExporter:
             for row in cursor.fetchall():
                 schema_name, proc_name = row
                 
-                # Get procedure definition using sys.sql_modules for exact original formatting
-                cursor.execute("""
-                    SELECT m.definition 
-                    FROM sys.sql_modules m
-                    INNER JOIN sys.objects o ON m.object_id = o.object_id
-                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
-                    WHERE s.name = ? AND o.name = ? AND o.type = 'P'
-                """, schema_name, proc_name)
-                definition_result = cursor.fetchone()
-                definition = definition_result[0] if definition_result and definition_result[0] else ""
+                # Get procedure definition using sp_helptext for complete original script
+                cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{proc_name}")
+                definition_rows = cursor.fetchall()
+                definition = "\n".join([row[0] for row in definition_rows]) if definition_rows else ""
                 
                 procedures.append({
                     'schema': schema_name,
@@ -270,16 +264,10 @@ class AzureSQLExporter:
             for row in cursor.fetchall():
                 schema_name, func_name = row
                 
-                # Get function definition using sys.sql_modules for exact original formatting
-                cursor.execute("""
-                    SELECT m.definition 
-                    FROM sys.sql_modules m
-                    INNER JOIN sys.objects o ON m.object_id = o.object_id
-                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
-                    WHERE s.name = ? AND o.name = ? AND o.type IN ('FN', 'IF', 'TF')
-                """, schema_name, func_name)
-                definition_result = cursor.fetchone()
-                definition = definition_result[0] if definition_result and definition_result[0] else ""
+                # Get function definition using sp_helptext for complete original script
+                cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{func_name}")
+                definition_rows = cursor.fetchall()
+                definition = "\n".join([row[0] for row in definition_rows]) if definition_rows else ""
                 
                 functions.append({
                     'schema': schema_name,
@@ -318,16 +306,10 @@ class AzureSQLExporter:
                 if exclude_schemas and schema_name in exclude_schemas:
                     continue
                 
-                # Get trigger definition using sys.sql_modules for exact original formatting
-                cursor.execute("""
-                    SELECT m.definition 
-                    FROM sys.sql_modules m
-                    INNER JOIN sys.objects o ON m.object_id = o.object_id
-                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
-                    WHERE s.name = ? AND o.name = ? AND o.type = 'TR'
-                """, schema_name, trigger_name)
-                definition_result = cursor.fetchone()
-                definition = definition_result[0] if definition_result and definition_result[0] else ""
+                # Get trigger definition using sp_helptext for complete original script
+                cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{trigger_name}")
+                definition_rows = cursor.fetchall()
+                definition = "\n".join([row[0] for row in definition_rows]) if definition_rows else ""
                 
                 triggers.append({
                     'schema': schema_name,
@@ -645,16 +627,10 @@ class AzureSQLExporter:
             
             try:
                 cursor = self.connection.cursor()
-                # Use sys.sql_modules for exact original formatting
-                cursor.execute("""
-                    SELECT m.definition 
-                    FROM sys.sql_modules m
-                    INNER JOIN sys.objects o ON m.object_id = o.object_id
-                    INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
-                    WHERE s.name = ? AND o.name = ? AND o.type = 'V'
-                """, schema_name, view_name)
-                definition_result = cursor.fetchone()
-                view_definition = definition_result[0] if definition_result and definition_result[0] else ""
+                # Use sp_helptext for complete original script
+                cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{view_name}")
+                definition_rows = cursor.fetchall()
+                view_definition = "\n".join([row[0] for row in definition_rows]) if definition_rows else ""
                 cursor.close()
                 
                 view_file = self.views_dir / f"{schema_name}.{view_name}.sql"
