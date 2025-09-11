@@ -231,7 +231,7 @@ class AzureSQLExporter:
                 # Get procedure definition using sp_helptext for complete original script
                 cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{proc_name}")
                 definition_rows = cursor.fetchall()
-                definition = "\n".join([row[0].rstrip() for row in definition_rows]) if definition_rows else ""
+                definition = "\n".join([row[0].rstrip('\r\n') for row in definition_rows]) if definition_rows else ""
                 
                 # Generate exact SSMS format with headers and SET statements
                 ssms_format = f"""/****** Object: StoredProcedure [{schema_name}].[{proc_name}] Script Date: {datetime.now().strftime('%m/%d/%Y %I:%M:%S %p')} ******/
@@ -277,7 +277,7 @@ GO"""
                 # Get function definition using sp_helptext for complete original script
                 cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{func_name}")
                 definition_rows = cursor.fetchall()
-                definition = "\n".join([row[0].rstrip() for row in definition_rows]) if definition_rows else ""
+                definition = "\n".join([row[0].rstrip('\r\n') for row in definition_rows]) if definition_rows else ""
                 
                 # Convert ALTER to CREATE for export purposes
                 definition = definition.replace("ALTER FUNCTION", "CREATE FUNCTION", 1)
@@ -322,7 +322,7 @@ GO"""
                 # Get trigger definition using sp_helptext for complete original script
                 cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{trigger_name}")
                 definition_rows = cursor.fetchall()
-                definition = "\n".join([row[0].rstrip() for row in definition_rows]) if definition_rows else ""
+                definition = "\n".join([row[0].rstrip('\r\n') for row in definition_rows]) if definition_rows else ""
                 
                 # Convert ALTER to CREATE for export purposes
                 definition = definition.replace("ALTER TRIGGER", "CREATE TRIGGER", 1)
@@ -646,7 +646,7 @@ GO"""
                 # Use sp_helptext for complete original script
                 cursor.execute("EXEC sp_helptext ?", f"{schema_name}.{view_name}")
                 definition_rows = cursor.fetchall()
-                view_definition = "\n".join([row[0].rstrip() for row in definition_rows]) if definition_rows else ""
+                view_definition = "\n".join([row[0].rstrip('\r\n') for row in definition_rows]) if definition_rows else ""
                 
                 # Convert ALTER to CREATE for export purposes
                 view_definition = view_definition.replace("ALTER VIEW", "CREATE VIEW", 1)
