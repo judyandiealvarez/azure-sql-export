@@ -959,10 +959,41 @@ class AzureSQLImporter:
                 
                 print(f"\n--- {obj_type.upper()}: {full_name} ---")
                 print("Differences found:")
-                for diff_line in differences[:10]:  # Show first 10 lines
-                    print(diff_line)
-                if len(differences) > 10:
-                    print(f"... and {len(differences) - 10} more lines")
+                print("=" * 60)
+                
+                # Show actual differences with proper formatting
+                in_diff_section = False
+                for diff_line in differences:
+                    if diff_line.startswith('---'):
+                        print(f"\n📄 EXISTING: {diff_line[4:]}")  # Remove "--- "
+                        in_diff_section = True
+                    elif diff_line.startswith('+++'):
+                        print(f"📄 NEW:      {diff_line[4:]}")  # Remove "+++ "
+                    elif diff_line.startswith('@@'):
+                        # Skip the hunk header for cleaner display
+                        continue
+                    elif diff_line.startswith('-') and in_diff_section:
+                        print(f"❌ REMOVE:   {diff_line[1:].strip()}")  # Remove the - and trim
+                    elif diff_line.startswith('+') and in_diff_section:
+                        print(f"✅ ADD:      {diff_line[1:].strip()}")  # Remove the + and trim
+                    elif diff_line.startswith(' ') and in_diff_section:
+                        print(f"   CONTEXT:  {diff_line[1:].strip()}")  # Context line
+                    elif not diff_line.startswith('@@'):
+                        print(diff_line)
+                
+                print("=" * 60)
+                
+                # Show what will happen
+                if exists and obj_type == 'tables':
+                    print("📋 ACTION: Will generate ALTER TABLE statements to update the existing table")
+                elif exists and obj_type in ['views', 'procedures', 'functions']:
+                    print("📋 ACTION: Will use CREATE OR ALTER to update the existing object")
+                elif exists and obj_type == 'triggers':
+                    print("📋 ACTION: Will DROP and recreate the existing trigger")
+                else:
+                    print("📋 ACTION: Will create the new object")
+                
+                print("=" * 60)
                 
                 if not self.ask_confirmation(f"Import {obj_type[:-1]} {full_name}?"):
                     logger.info(f"Skipped {obj_type[:-1]} {full_name}")

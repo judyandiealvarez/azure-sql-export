@@ -345,7 +345,17 @@ Skipping view dbo.UserSummary - no differences found (identical)
 
 --- TABLES: dbo.Products ---
 Differences found:
-+ [Price] decimal(10,2) NOT NULL
+============================================================
+
+📄 EXISTING: Existing dbo.Products
+📄 NEW:      New dbo.Products
+❌ REMOVE:   [ID] int IDENTITY(1,1) NOT NULL,
+✅ ADD:      [ID] int IDENTITY(1,1) NOT NULL,
+✅ ADD:      [Price] decimal(10,2) NOT NULL,
+   CONTEXT:  [Name] nvarchar(100) NOT NULL,
+============================================================
+📋 ACTION: Will generate ALTER TABLE statements to update the existing table
+============================================================
 Import table dbo.Products? [y/N]: y
 
 Import summary: 1 objects imported, 2 identical objects skipped
@@ -356,6 +366,8 @@ Import summary: 1 objects imported, 2 identical objects skipped
 - **Cleaner Workflow**: Only interact with objects that actually need changes
 - **Better Focus**: Attention on objects that require decisions
 - **Reduced Errors**: Less chance of accidentally overwriting identical objects
+- **Clear Differences**: Visual diff display shows exactly what will change
+- **Action Preview**: Shows what type of operation will be performed
 
 #### Smart ALTER Logic for Existing Objects
 The import tool now uses proper ALTER statements instead of DROP/CREATE for existing objects:
