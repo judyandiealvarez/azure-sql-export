@@ -47,6 +47,8 @@ Thumbs.db
 # Project specific
 export_output/
 *.log
-config.json
-my_config.json
+config.yaml
+config.yml
+my_config.yaml
+my_config.yml
 .env

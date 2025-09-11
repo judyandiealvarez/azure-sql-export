@@ -29,70 +29,95 @@ A Python script to export Azure SQL Database schema objects and table data for m
 
 1. Copy and edit the configuration file:
    ```bash
-   cp config.json my_config.json
+   cp config.example.yaml config.yaml
    ```
 
-2. Update `my_config.json` with your Azure SQL Database details:
+2. Update `config.yaml` with your Azure SQL Database details:
 
    **For SQL Server Authentication:**
-   ```json
-   {
-     "server": "your-server.database.windows.net",
-     "database": "your-database-name",
-     "authentication_type": "sql",
-     "username": "your-username",
-     "password": "your-password",
-     "driver": "ODBC Driver 17 for SQL Server",
-     "output_directory": "export_output",
-     "export_data": true,
-     "batch_size": 1000
-   }
+   ```yaml
+   # Database connection settings
+   server: "your-server.database.windows.net"
+   database: "your-database-name"
+   
+   # Authentication type: "sql" or "azure_ad"
+   authentication_type: "sql"
+   
+   # SQL Server authentication
+   username: "your-username"
+   password: "your-password"
+   
+   # ODBC driver name
+   driver: "ODBC Driver 17 for SQL Server"
+   
+   # Output settings
+   output_directory: "export_output"
+   export_data: true
+   batch_size: 1000
+   
+   # Schema filtering
+   include_schemas: []
+   exclude_schemas:
+     - "sys"
+     - "INFORMATION_SCHEMA"
    ```
 
    **For Azure AD Authentication:**
-   ```json
-   {
-     "server": "your-server.database.windows.net",
-     "database": "your-database-name",
-     "authentication_type": "azure_ad",
-     "driver": "ODBC Driver 17 for SQL Server",
-     "output_directory": "export_output",
-     "export_data": true,
-     "batch_size": 1000
-   }
+   ```yaml
+   # Database connection settings
+   server: "your-server.database.windows.net"
+   database: "your-database-name"
+   
+   # Authentication type: "sql" or "azure_ad"
+   authentication_type: "azure_ad"
+   
+   # ODBC driver name
+   driver: "ODBC Driver 17 for SQL Server"
+   
+   # Output settings
+   output_directory: "export_output"
+   export_data: true
+   batch_size: 1000
+   
+   # Schema filtering
+   include_schemas: []
+   exclude_schemas:
+     - "sys"
+     - "INFORMATION_SCHEMA"
    ```
 
 ## Usage
 
 ### Basic Usage
 ```bash
-python azure_sql_export.py --config my_config.json
+python azure_sql_export.py --config config.yaml
 ```
 
 ### Custom Output Directory
 ```bash
-python azure_sql_export.py --config my_config.json --output /path/to/output
+python azure_sql_export.py --config config.yaml --output /path/to/output
 ```
 
 ### Schema Only (No Data)
-Edit your config file and set `"export_data": false`
+Edit your config file and set `export_data: false`
 
 ### Export Specific Schemas Only
 To export only specific schemas (e.g., only 'dbo' and 'custom_schema'):
-```json
-{
-  "include_schemas": ["dbo", "custom_schema"],
-  "exclude_schemas": []
-}
+```yaml
+include_schemas:
+  - "dbo"
+  - "custom_schema"
+exclude_schemas: []
 ```
 
 ### Exclude System Schemas
 To exclude system schemas (default behavior):
-```json
-{
-  "include_schemas": [],
-  "exclude_schemas": ["sys", "INFORMATION_SCHEMA", "guest"]
-}
+```yaml
+include_schemas: []
+exclude_schemas:
+  - "sys"
+  - "INFORMATION_SCHEMA"
+  - "guest"
 ```
 
 ## Output Structure
@@ -164,6 +189,12 @@ export_output/
 ## Logging
 
 The script creates detailed logs in `azure_sql_export.log` and displays progress in the console.
+
+## Configuration File Support
+
+The tool supports both YAML and JSON configuration files:
+- **YAML** (recommended): More readable with comments and better structure
+- **JSON**: Traditional format, still supported for compatibility
 
 ## Security Notes
 

@@ -16,6 +16,7 @@ Features:
 import os
 import sys
 import json
+import yaml
 import logging
 import argparse
 from datetime import datetime
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 class AzureSQLExporter:
     """Main class for exporting Azure SQL Database schema and data."""
     
-    def __init__(self, config_file: str = "config.json"):
+    def __init__(self, config_file: str = "config.yaml"):
         """Initialize the exporter with configuration."""
         self.config = self._load_config(config_file)
         self.connection = None
@@ -53,15 +54,18 @@ class AzureSQLExporter:
         self.data_dir.mkdir(exist_ok=True)
         
     def _load_config(self, config_file: str) -> Dict:
-        """Load configuration from JSON file."""
+        """Load configuration from YAML or JSON file."""
         try:
             with open(config_file, 'r') as f:
-                return json.load(f)
+                if config_file.endswith(('.yaml', '.yml')):
+                    return yaml.safe_load(f)
+                else:
+                    return json.load(f)
         except FileNotFoundError:
             logger.error(f"Configuration file {config_file} not found!")
             sys.exit(1)
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in configuration file: {e}")
+        except (yaml.YAMLError, json.JSONDecodeError) as e:
+            logger.error(f"Invalid configuration file format: {e}")
             sys.exit(1)
     
     def connect(self) -> bool:
@@ -604,7 +608,7 @@ class AzureSQLExporter:
 def main():
     """Main function."""
     parser = argparse.ArgumentParser(description='Export Azure SQL Database schema and data')
-    parser.add_argument('--config', default='config.json', help='Configuration file path')
+    parser.add_argument('--config', default='config.yaml', help='Configuration file path (YAML or JSON)')
     parser.add_argument('--output', help='Output directory (overrides config)')
     
     args = parser.parse_args()
