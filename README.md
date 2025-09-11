@@ -17,6 +17,7 @@ Python scripts to export, import, and compare Azure SQL Database schema objects 
 - **Interactive Import**: Compare and confirm imports with detailed differences
 - **Schema Comparison**: Shows differences between existing and new objects
 - **Auto-Skip Identical**: Automatically skips objects with no differences
+- **Smart ALTER Logic**: Uses ALTER statements for existing objects (no DROP/CREATE)
 - **Data Import Options**: Truncate and import or append to existing tables
 - **Binary Data Import**: High-performance binary data import with compression
 - **Safe Import**: Rollback capabilities and detailed logging
@@ -355,6 +356,49 @@ Import summary: 1 objects imported, 2 identical objects skipped
 - **Cleaner Workflow**: Only interact with objects that actually need changes
 - **Better Focus**: Attention on objects that require decisions
 - **Reduced Errors**: Less chance of accidentally overwriting identical objects
+
+#### Smart ALTER Logic for Existing Objects
+The import tool now uses proper ALTER statements instead of DROP/CREATE for existing objects:
+
+**Object-Specific Handling:**
+
+**Tables:**
+- **New Columns**: `ALTER TABLE [schema].[table] ADD [column] [type]`
+- **Modified Columns**: `ALTER TABLE [schema].[table] ALTER COLUMN [column] [new_type]`
+- **Dropped Columns**: Warning logged (manual review required)
+- **Preserves Data**: No data loss during schema changes
+
+**Views/Procedures/Functions:**
+- **CREATE OR ALTER**: Uses `CREATE OR ALTER` syntax
+- **Safe Replacement**: Automatically handles existing objects
+- **No Data Loss**: Preserves dependent objects
+
+**Triggers:**
+- **DROP + CREATE**: `DROP TRIGGER IF EXISTS` then `CREATE TRIGGER`
+- **Clean Recreation**: Ensures trigger is properly updated
+- **Safe Operation**: Uses `IF EXISTS` for safety
+
+**Example ALTER Operations:**
+```sql
+-- Adding new column
+ALTER TABLE [dbo].[Users] ADD [Email] nvarchar(255) NULL
+
+-- Modifying existing column
+ALTER TABLE [dbo].[Users] ALTER COLUMN [Name] nvarchar(200) NOT NULL
+
+-- Recreating trigger
+DROP TRIGGER IF EXISTS [dbo].[tr_Users_Update]
+CREATE TRIGGER [dbo].[tr_Users_Update] ON [dbo].[Users] FOR UPDATE AS ...
+
+-- Updating procedure
+CREATE OR ALTER PROCEDURE [dbo].[sp_GetUser] @UserId int AS ...
+```
+
+**Benefits:**
+- **Data Preservation**: No data loss during schema updates
+- **Safe Operations**: Uses proper SQL Server syntax
+- **Incremental Changes**: Only modifies what's different
+- **Production Ready**: Safe for live database updates
 
 ### Exclude System Schemas
 To exclude system schemas (default behavior):

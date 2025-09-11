@@ -604,6 +604,107 @@ class AzureSQLImporter:
             logger.error(f"Error executing {description}: {e}")
             return False
     
+    def generate_alter_statements(self, new_schema: str, existing_schema: str, schema_name: str, table_name: str) -> List[str]:
+        """Generate ALTER TABLE statements for table changes."""
+        alter_statements = []
+        
+        try:
+            # Parse new table definition
+            new_lines = [line.strip() for line in new_schema.split('\n') if line.strip() and not line.strip().startswith('--')]
+            existing_lines = [line.strip() for line in existing_schema.split('\n') if line.strip() and not line.strip().startswith('--')]
+            
+            # Extract column definitions from CREATE TABLE statements
+            new_columns = self._extract_columns(new_schema)
+            existing_columns = self._extract_columns(existing_schema)
+            
+            # Find new columns
+            for col_name, col_def in new_columns.items():
+                if col_name not in existing_columns:
+                    alter_statements.append(f"ALTER TABLE [{schema_name}].[{table_name}] ADD {col_def}")
+            
+            # Find modified columns
+            for col_name, col_def in new_columns.items():
+                if col_name in existing_columns and existing_columns[col_name] != col_def:
+                    alter_statements.append(f"ALTER TABLE [{schema_name}].[{table_name}] ALTER COLUMN {col_def}")
+            
+            # Find dropped columns (be careful with this)
+            for col_name in existing_columns:
+                if col_name not in new_columns:
+                    logger.warning(f"Column {col_name} exists in database but not in new schema - manual review needed")
+            
+            return alter_statements
+            
+        except Exception as e:
+            logger.error(f"Error generating ALTER statements: {e}")
+            return []
+    
+    def _extract_columns(self, schema_sql: str) -> Dict[str, str]:
+        """Extract column definitions from CREATE TABLE statement."""
+        columns = {}
+        
+        # Find the CREATE TABLE statement
+        lines = schema_sql.split('\n')
+        in_table_def = False
+        
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('--'):
+                continue
+                
+            if line.upper().startswith('CREATE TABLE'):
+                in_table_def = True
+                continue
+                
+            if in_table_def:
+                if line.startswith(')') or line.upper().startswith('CONSTRAINT'):
+                    break
+                    
+                # Extract column definition
+                if '[' in line and ']' in line:
+                    # Find column name and definition
+                    parts = line.split(',')
+                    for part in parts:
+                        part = part.strip()
+                        if '[' in part and ']' in part:
+                            # Extract column name
+                            start = part.find('[')
+                            end = part.find(']')
+                            if start != -1 and end != -1:
+                                col_name = part[start+1:end]
+                                col_def = part.strip()
+                                if col_def.endswith(','):
+                                    col_def = col_def[:-1]
+                                columns[col_name] = col_def
+        
+        return columns
+    
+    def execute_alter_statements(self, alter_statements: List[str], description: str) -> bool:
+        """Execute ALTER statements."""
+        if not alter_statements:
+            logger.info(f"No ALTER statements needed for {description}")
+            return True
+            
+        try:
+            cursor = self.connection.cursor()
+            
+            for i, statement in enumerate(alter_statements):
+                try:
+                    cursor.execute(statement)
+                    logger.info(f"Executed ALTER statement {i+1}/{len(alter_statements)} for {description}")
+                except Exception as e:
+                    logger.error(f"Error executing ALTER statement {i+1} for {description}: {e}")
+                    logger.error(f"Statement: {statement}")
+                    cursor.rollback()
+                    return False
+            
+            cursor.commit()
+            cursor.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error executing ALTER statements for {description}: {e}")
+            return False
+    
     def import_table_data(self, schema_name: str, table_name: str, data_file: Path) -> bool:
         """Import table data with options for truncate/append."""
         try:
@@ -873,12 +974,73 @@ class AzureSQLImporter:
             
             # Execute the import
             description = f"{obj_type[:-1]} {full_name}"
-            if self.execute_sql_file(file_path, description):
-                total_processed += 1
-                logger.info(f"Successfully imported {description}")
+            
+            if exists and obj_type == 'tables':
+                # For existing tables, generate and execute ALTER statements
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    new_schema = f.read()
+                
+                existing_schema = self.get_table_schema(schema_name, object_name)
+                alter_statements = self.generate_alter_statements(new_schema, existing_schema, schema_name, object_name)
+                
+                if self.execute_alter_statements(alter_statements, description):
+                    total_processed += 1
+                    logger.info(f"Successfully altered {description}")
+                else:
+                    logger.error(f"Failed to alter {description}")
             else:
-                logger.error(f"Failed to import {description}")
-                # Continue with other objects even if one fails
+                # For new objects or non-table objects, use CREATE OR ALTER
+                if exists and obj_type in ['views', 'procedures', 'functions']:
+                    # Use CREATE OR ALTER for existing objects
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        sql_content = f.read()
+                    
+                    # Replace CREATE with CREATE OR ALTER
+                    modified_sql = sql_content.replace('CREATE ', 'CREATE OR ALTER ', 1)
+                    
+                    # Write to temporary file
+                    temp_file = file_path.parent / f"temp_{file_path.name}"
+                    with open(temp_file, 'w', encoding='utf-8') as f:
+                        f.write(modified_sql)
+                    
+                    success = self.execute_sql_file(temp_file, description)
+                    temp_file.unlink()  # Clean up temp file
+                    
+                    if success:
+                        total_processed += 1
+                        logger.info(f"Successfully created or altered {description}")
+                    else:
+                        logger.error(f"Failed to create or alter {description}")
+                elif exists and obj_type == 'triggers':
+                    # For existing triggers, drop first then create
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        sql_content = f.read()
+                    
+                    # Generate DROP TRIGGER statement
+                    drop_sql = f"DROP TRIGGER IF EXISTS [{schema_name}].[{object_name}];\n"
+                    modified_sql = drop_sql + sql_content
+                    
+                    # Write to temporary file
+                    temp_file = file_path.parent / f"temp_{file_path.name}"
+                    with open(temp_file, 'w', encoding='utf-8') as f:
+                        f.write(modified_sql)
+                    
+                    success = self.execute_sql_file(temp_file, description)
+                    temp_file.unlink()  # Clean up temp file
+                    
+                    if success:
+                        total_processed += 1
+                        logger.info(f"Successfully recreated trigger {description}")
+                    else:
+                        logger.error(f"Failed to recreate trigger {description}")
+                else:
+                    # For new objects, use original CREATE
+                    if self.execute_sql_file(file_path, description):
+                        total_processed += 1
+                        logger.info(f"Successfully imported {description}")
+                    else:
+                        logger.error(f"Failed to import {description}")
+                        # Continue with other objects even if one fails
         
         # Print summary
         if skipped_identical > 0:
