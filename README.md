@@ -377,6 +377,8 @@ The import tool now uses proper ALTER statements instead of DROP/CREATE for exis
 **Tables:**
 - **New Columns**: `ALTER TABLE [schema].[table] ADD [column] [type]`
 - **Modified Columns**: `ALTER TABLE [schema].[table] ALTER COLUMN [column] [new_type]`
+- **DEFAULT Constraints**: `ALTER TABLE [schema].[table] ADD CONSTRAINT [name] DEFAULT [value] FOR [column]`
+- **Constraint Management**: Automatically finds and drops existing constraints
 - **Dropped Columns**: Warning logged (manual review required)
 - **Preserves Data**: No data loss during schema changes
 
@@ -397,6 +399,12 @@ ALTER TABLE [dbo].[Users] ADD [Email] nvarchar(255) NULL
 
 -- Modifying existing column
 ALTER TABLE [dbo].[Users] ALTER COLUMN [Name] nvarchar(200) NOT NULL
+
+-- Adding DEFAULT constraint
+ALTER TABLE [dbo].[Users] ADD CONSTRAINT [DF_Users_Id] DEFAULT (newid()) FOR [Id]
+
+-- Dropping existing DEFAULT constraint
+ALTER TABLE [dbo].[Users] DROP CONSTRAINT [DF_Users_CreatedDate]
 
 -- Recreating trigger
 DROP TRIGGER IF EXISTS [dbo].[tr_Users_Update]

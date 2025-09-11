@@ -625,7 +625,34 @@ class AzureSQLImporter:
             # Find modified columns
             for col_name, col_def in new_columns.items():
                 if col_name in existing_columns and existing_columns[col_name] != col_def:
-                    alter_statements.append(f"ALTER TABLE [{schema_name}].[{table_name}] ALTER COLUMN {col_def}")
+                    # Parse column definition to separate data type from constraints
+                    new_col_parts = self._parse_column_definition(col_def)
+                    existing_col_parts = self._parse_column_definition(existing_columns[col_name])
+                    
+                    # Check if data type or nullability changed
+                    if (new_col_parts['data_type'] != existing_col_parts['data_type'] or 
+                        new_col_parts['nullable'] != existing_col_parts['nullable']):
+                        # Generate ALTER COLUMN for data type/nullability changes
+                        alter_col_def = f"[{col_name}] {new_col_parts['data_type']}"
+                        if not new_col_parts['nullable']:
+                            alter_col_def += " NOT NULL"
+                        alter_statements.append(f"ALTER TABLE [{schema_name}].[{table_name}] ALTER COLUMN {alter_col_def}")
+                    
+                    # Check if DEFAULT constraint changed
+                    if new_col_parts['default'] != existing_col_parts['default']:
+                        # Drop existing default constraint if it exists
+                        if existing_col_parts['default']:
+                            # Try to find the actual constraint name first
+                            constraint_name = self._get_default_constraint_name(schema_name, table_name, col_name)
+                            if constraint_name:
+                                alter_statements.append(f"ALTER TABLE [{schema_name}].[{table_name}] DROP CONSTRAINT [{constraint_name}]")
+                            else:
+                                # Fallback to standard naming convention
+                                alter_statements.append(f"ALTER TABLE [{schema_name}].[{table_name}] DROP CONSTRAINT [DF_{table_name}_{col_name}]")
+                        
+                        # Add new default constraint if specified
+                        if new_col_parts['default']:
+                            alter_statements.append(f"ALTER TABLE [{schema_name}].[{table_name}] ADD CONSTRAINT [DF_{table_name}_{col_name}] DEFAULT {new_col_parts['default']} FOR [{col_name}]")
             
             # Find dropped columns (be careful with this)
             for col_name in existing_columns:
@@ -678,6 +705,61 @@ class AzureSQLImporter:
         
         return columns
     
+    def _parse_column_definition(self, col_def: str) -> Dict[str, str]:
+        """Parse a column definition into its components."""
+        parts = {
+            'data_type': '',
+            'nullable': True,
+            'default': None
+        }
+        
+        # Remove column name and brackets
+        col_def = col_def.strip()
+        if col_def.startswith('[') and ']' in col_def:
+            col_def = col_def[col_def.find(']') + 1:].strip()
+        
+        # Remove trailing comma if present
+        if col_def.endswith(','):
+            col_def = col_def[:-1].strip()
+        
+        # Check for NOT NULL
+        if 'NOT NULL' in col_def.upper():
+            parts['nullable'] = False
+            col_def = col_def.replace('NOT NULL', '').strip()
+        
+        # Check for DEFAULT constraint
+        if 'DEFAULT' in col_def.upper():
+            default_start = col_def.upper().find('DEFAULT')
+            default_part = col_def[default_start:].strip()
+            parts['default'] = default_part
+            col_def = col_def[:default_start].strip()
+        
+        # Clean up data type
+        parts['data_type'] = col_def.strip()
+        
+        return parts
+    
+    def _get_default_constraint_name(self, schema_name: str, table_name: str, column_name: str) -> str:
+        """Get the actual name of a default constraint for a column."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT dc.name
+                FROM sys.default_constraints dc
+                INNER JOIN sys.columns c ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id
+                INNER JOIN sys.tables t ON c.object_id = t.object_id
+                INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+                WHERE s.name = ? AND t.name = ? AND c.name = ?
+            """, schema_name, table_name, column_name)
+            
+            result = cursor.fetchone()
+            cursor.close()
+            return result[0] if result else None
+            
+        except Exception as e:
+            logger.warning(f"Could not get default constraint name for {schema_name}.{table_name}.{column_name}: {e}")
+            return None
+    
     def execute_alter_statements(self, alter_statements: List[str], description: str) -> bool:
         """Execute ALTER statements."""
         if not alter_statements:
@@ -692,10 +774,15 @@ class AzureSQLImporter:
                     cursor.execute(statement)
                     logger.info(f"Executed ALTER statement {i+1}/{len(alter_statements)} for {description}")
                 except Exception as e:
-                    logger.error(f"Error executing ALTER statement {i+1} for {description}: {e}")
-                    logger.error(f"Statement: {statement}")
-                    cursor.rollback()
-                    return False
+                    # For constraint operations, try to continue if it's a "doesn't exist" error
+                    if "does not exist" in str(e).lower() or "not found" in str(e).lower():
+                        logger.warning(f"Constraint operation skipped (constraint may not exist): {statement}")
+                        continue
+                    else:
+                        logger.error(f"Error executing ALTER statement {i+1} for {description}: {e}")
+                        logger.error(f"Statement: {statement}")
+                        cursor.rollback()
+                        return False
             
             cursor.commit()
             cursor.close()
