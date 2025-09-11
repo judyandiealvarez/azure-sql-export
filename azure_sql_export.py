@@ -19,6 +19,8 @@ import json
 import yaml
 import logging
 import argparse
+import pickle
+import gzip
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import pyodbc
@@ -50,8 +52,10 @@ class AzureSQLExporter:
         # Create subdirectories organized by object type
         self.schema_dir = self.output_dir / 'schema'
         self.data_dir = self.output_dir / 'data'
+        self.binary_data_dir = self.output_dir / 'binary_data'
         self.schema_dir.mkdir(exist_ok=True)
         self.data_dir.mkdir(exist_ok=True)
+        self.binary_data_dir.mkdir(exist_ok=True)
         
         # Create type-specific directories
         self.tables_dir = self.schema_dir / 'tables'
@@ -437,6 +441,86 @@ class AzureSQLExporter:
             logger.error(f"Error exporting table data for {table_info['schema']}.{table_info['name']}: {e}")
             return f"-- Error exporting table data: {e}\n"
     
+    def export_table_data_binary(self, table_info: Dict) -> bool:
+        """Export table data as binary format (pickle + gzip)."""
+        try:
+            schema_name = table_info['schema']
+            table_name = table_info['name']
+            full_table_name = f"[{schema_name}].[{table_name}]"
+            
+            # Get column information
+            cursor = self.connection.cursor()
+            cursor.execute("""
+                SELECT COLUMN_NAME, DATA_TYPE
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+                ORDER BY ORDINAL_POSITION
+            """, schema_name, table_name)
+            
+            columns = cursor.fetchall()
+            column_names = [col[0] for col in columns]
+            
+            # Check if table has data
+            cursor.execute(f"SELECT COUNT(*) FROM {full_table_name}")
+            row_count = cursor.fetchone()[0]
+            
+            if row_count == 0:
+                cursor.close()
+                logger.info(f"No data in table {full_table_name}")
+                return True
+            
+            logger.info(f"Exporting {row_count} rows from {full_table_name} as binary")
+            
+            # Export data in batches
+            batch_size = self.config.get('batch_size', 10000)  # Larger batches for binary
+            all_data = []
+            
+            for offset in range(0, row_count, batch_size):
+                cursor.execute(f"""
+                    SELECT * FROM {full_table_name}
+                    ORDER BY (SELECT NULL)
+                    OFFSET {offset} ROWS
+                    FETCH NEXT {batch_size} ROWS ONLY
+                """)
+                
+                rows = cursor.fetchall()
+                all_data.extend(rows)
+                
+                logger.info(f"Processed batch {offset//batch_size + 1} for {full_table_name}")
+            
+            cursor.close()
+            
+            # Create binary file
+            binary_file = self.binary_data_dir / f"{schema_name}.{table_name}.pkl.gz"
+            
+            # Prepare data for serialization
+            data_info = {
+                'schema': schema_name,
+                'table': table_name,
+                'columns': column_names,
+                'data': all_data,
+                'row_count': len(all_data),
+                'exported_at': datetime.now().isoformat()
+            }
+            
+            # Save as compressed pickle
+            with gzip.open(binary_file, 'wb') as f:
+                pickle.dump(data_info, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+            # Calculate compression ratio
+            original_size = len(str(all_data))
+            compressed_size = binary_file.stat().st_size
+            compression_ratio = (1 - compressed_size / original_size) * 100 if original_size > 0 else 0
+            
+            logger.info(f"Exported binary data: {binary_file}")
+            logger.info(f"Compression ratio: {compression_ratio:.1f}% (original: {original_size:,} bytes, compressed: {compressed_size:,} bytes)")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error exporting binary data for {table_info['schema']}.{table_info['name']}: {e}")
+            return False
+    
     def export_schema_objects(self, objects: Dict[str, List[Dict]]):
         """Export all schema objects to SQL files."""
         logger.info("Exporting schema objects...")
@@ -534,22 +618,28 @@ class AzureSQLExporter:
     
     def export_table_data_all(self, objects: Dict[str, List[Dict]]):
         """Export data for all tables."""
-        logger.info("Exporting table data...")
+        data_format = self.config.get('data_format', 'sql')  # 'sql' or 'binary'
         
-        for table in objects['tables']:
-            schema_name = table['schema']
-            table_name = table['name']
-            
-            # Export table data
-            table_data = self.export_table_data(table)
-            data_file = self.data_dir / f"{schema_name}.{table_name}.sql"
-            
-            with open(data_file, 'w', encoding='utf-8') as f:
-                f.write(f"-- Table data for {schema_name}.{table_name}\n")
-                f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-                f.write(table_data)
-            
-            logger.info(f"Exported table data: {data_file}")
+        if data_format == 'binary':
+            logger.info("Exporting table data as binary format...")
+            for table in objects['tables']:
+                self.export_table_data_binary(table)
+        else:
+            logger.info("Exporting table data as SQL format...")
+            for table in objects['tables']:
+                schema_name = table['schema']
+                table_name = table['name']
+                
+                # Export table data
+                table_data = self.export_table_data(table)
+                data_file = self.data_dir / f"{schema_name}.{table_name}.sql"
+                
+                with open(data_file, 'w', encoding='utf-8') as f:
+                    f.write(f"-- Table data for {schema_name}.{table_name}\n")
+                    f.write(f"-- Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                    f.write(table_data)
+                
+                logger.info(f"Exported table data: {data_file}")
     
     def create_migration_script(self, objects: Dict[str, List[Dict]]):
         """Create a master migration script."""

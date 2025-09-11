@@ -20,3 +20,4 @@ import_directory: "export_output"  # Directory containing exported files
 show_data_samples: true           # Show sample data in comparison
 sample_size: 5                   # Number of sample rows to show
 export_report: true              # Export detailed report to file
+data_format: "sql"               # "sql" or "binary" - must match export format

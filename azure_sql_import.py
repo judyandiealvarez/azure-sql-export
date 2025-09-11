@@ -20,6 +20,8 @@ import json
 import logging
 import argparse
 import re
+import pickle
+import gzip
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Set
 import pyodbc
@@ -201,6 +203,7 @@ class AzureSQLImporter:
         self.import_dir = Path(self.config.get('import_directory', 'export_output'))
         self.schema_dir = self.import_dir / 'schema'
         self.data_dir = self.import_dir / 'data'
+        self.binary_data_dir = self.import_dir / 'binary_data'
         
         # Import options
         self.auto_confirm = self.config.get('auto_confirm', False)
@@ -627,6 +630,91 @@ class AzureSQLImporter:
             logger.error(f"Error importing data for {schema_name}.{table_name}: {e}")
             return False
     
+    def import_table_data_binary(self, schema_name: str, table_name: str, binary_file: Path) -> bool:
+        """Import table data from binary format."""
+        try:
+            # Load binary data
+            with gzip.open(binary_file, 'rb') as f:
+                data_info = pickle.load(f)
+            
+            logger.info(f"Loading binary data for {schema_name}.{table_name}: {data_info['row_count']} rows")
+            
+            # Check if table has existing data
+            existing_count = self.get_table_row_count(schema_name, table_name)
+            
+            if existing_count > 0:
+                if not self.auto_confirm:
+                    print(f"\nTable {schema_name}.{table_name} has {existing_count} existing rows.")
+                    print("Options:")
+                    print("1. Truncate table and import new data")
+                    print("2. Append new data to existing data")
+                    print("3. Skip this table")
+                    
+                    while True:
+                        choice = input("Choose option [1/2/3]: ").strip()
+                        if choice == '1':
+                            truncate = True
+                            break
+                        elif choice == '2':
+                            truncate = False
+                            break
+                        elif choice == '3':
+                            logger.info(f"Skipping table {schema_name}.{table_name}")
+                            return True
+                        else:
+                            print("Please enter 1, 2, or 3")
+                else:
+                    truncate = self.truncate_tables
+            else:
+                truncate = False
+            
+            cursor = self.connection.cursor()
+            
+            # Truncate table if requested
+            if truncate:
+                cursor.execute(f"TRUNCATE TABLE [{schema_name}].[{table_name}]")
+                logger.info(f"Truncated table {schema_name}.{table_name}")
+            
+            # Prepare data for bulk insert
+            columns = data_info['columns']
+            data = data_info['data']
+            
+            if not data:
+                logger.info(f"No data to import for {schema_name}.{table_name}")
+                cursor.close()
+                return True
+            
+            # Create parameterized insert statement
+            placeholders = ",".join(["?" for _ in columns])
+            insert_sql = f"INSERT INTO [{schema_name}].[{table_name}] ([{'], ['.join(columns)}]) VALUES ({placeholders})"
+            
+            # Insert data in batches
+            batch_size = self.config.get('batch_size', 1000)
+            total_rows = len(data)
+            
+            for i in range(0, total_rows, batch_size):
+                batch = data[i:i + batch_size]
+                
+                for row in batch:
+                    try:
+                        cursor.execute(insert_sql, row)
+                    except Exception as e:
+                        logger.error(f"Error inserting row for {schema_name}.{table_name}: {e}")
+                        logger.error(f"Row data: {row}")
+                        cursor.rollback()
+                        return False
+                
+                cursor.commit()
+                logger.info(f"Imported batch {i//batch_size + 1}/{(total_rows-1)//batch_size + 1} for {schema_name}.{table_name}")
+            
+            cursor.close()
+            logger.info(f"Successfully imported {total_rows} rows for {schema_name}.{table_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error importing binary data for {schema_name}.{table_name}: {e}")
+            return False
+    
     def import_schema_objects(self, exported_files: Dict[str, List[Dict]], existing_objects: Dict[str, Dict]):
         """Import schema objects with dependency analysis and proper ordering."""
         logger.info("Starting schema object import with dependency analysis...")
@@ -694,25 +782,37 @@ class AzureSQLImporter:
     
     def import_table_data_all(self, exported_files: Dict[str, List[Dict]]):
         """Import data for all tables."""
-        if not self.data_dir.exists():
-            logger.info("No data directory found, skipping data import")
-            return
+        data_format = self.config.get('data_format', 'sql')  # 'sql' or 'binary'
         
-        logger.info("\n=== Importing Table Data ===")
+        if data_format == 'binary':
+            data_dir = self.binary_data_dir
+            file_extension = '.pkl.gz'
+            logger.info("\n=== Importing Table Data (Binary Format) ===")
+        else:
+            data_dir = self.data_dir
+            file_extension = '.sql'
+            logger.info("\n=== Importing Table Data (SQL Format) ===")
+        
+        if not data_dir.exists():
+            logger.info(f"No {data_format} data directory found, skipping data import")
+            return
         
         for table_obj in exported_files['tables']:
             schema_name = table_obj['schema']
             table_name = table_obj['name']
-            data_file = self.data_dir / f"{schema_name}.{table_name}.sql"
+            data_file = data_dir / f"{schema_name}.{table_name}{file_extension}"
             
             if data_file.exists():
                 if not self.ask_confirmation(f"Import data for table {schema_name}.{table_name}?"):
                     logger.info(f"Skipped data import for {schema_name}.{table_name}")
                     continue
                 
-                self.import_table_data(schema_name, table_name, data_file)
+                if data_format == 'binary':
+                    self.import_table_data_binary(schema_name, table_name, data_file)
+                else:
+                    self.import_table_data(schema_name, table_name, data_file)
             else:
-                logger.info(f"No data file found for {schema_name}.{table_name}")
+                logger.info(f"No {data_format} data file found for {schema_name}.{table_name}")
     
     def run_import(self):
         """Run the complete import process."""

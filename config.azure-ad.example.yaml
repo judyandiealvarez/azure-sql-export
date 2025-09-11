@@ -15,6 +15,7 @@ driver: "ODBC Driver 17 for SQL Server"
 output_directory: "export_output"
 export_data: true
 batch_size: 1000
+data_format: "sql"  # "sql" or "binary"
 
 # Schema filtering
 # Leave include_schemas empty to include all schemas

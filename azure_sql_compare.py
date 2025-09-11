@@ -20,6 +20,8 @@ import json
 import logging
 import argparse
 import re
+import pickle
+import gzip
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Set
 import pyodbc
@@ -50,6 +52,7 @@ class DatabaseComparator:
         self.import_dir = Path(self.config.get('import_directory', 'export_output'))
         self.schema_dir = self.import_dir / 'schema'
         self.data_dir = self.import_dir / 'data'
+        self.binary_data_dir = self.import_dir / 'binary_data'
         
         # Comparison options
         self.show_data_samples = self.config.get('show_data_samples', True)
@@ -502,6 +505,70 @@ class DatabaseComparator:
         
         return data_comparison
     
+    def compare_binary_data(self, exported_files: Dict[str, List[Dict]]) -> Dict:
+        """Compare binary table data between export and database."""
+        data_comparison = {}
+        
+        if not self.binary_data_dir.exists():
+            logger.info("No binary data directory found for comparison")
+            return data_comparison
+        
+        for table_obj in exported_files['tables']:
+            schema_name = table_obj['schema']
+            table_name = table_obj['name']
+            binary_file = self.binary_data_dir / f"{schema_name}.{table_name}.pkl.gz"
+            
+            if binary_file.exists():
+                try:
+                    # Load binary data
+                    with gzip.open(binary_file, 'rb') as f:
+                        data_info = pickle.load(f)
+                    
+                    # Get database row count
+                    db_count = self.get_table_row_count(schema_name, table_name)
+                    exported_count = data_info['row_count']
+                    
+                    data_comparison[f"{schema_name}.{table_name}"] = {
+                        'database_rows': db_count,
+                        'exported_rows': exported_count,
+                        'difference': exported_count - db_count,
+                        'has_binary_file': True,
+                        'exported_at': data_info.get('exported_at', 'Unknown'),
+                        'file_size': binary_file.stat().st_size
+                    }
+                    
+                    # Get sample data if requested
+                    if self.show_data_samples and db_count > 0:
+                        sample_data = self.get_table_sample_data(schema_name, table_name, self.sample_size)
+                        data_comparison[f"{schema_name}.{table_name}"]['sample_data'] = sample_data
+                    
+                    # Compare sample data from binary file
+                    if self.show_data_samples and exported_count > 0:
+                        binary_sample = data_info['data'][:self.sample_size]
+                        data_comparison[f"{schema_name}.{table_name}"]['binary_sample'] = binary_sample
+                        
+                except Exception as e:
+                    logger.warning(f"Could not analyze binary data for {schema_name}.{table_name}: {e}")
+                    data_comparison[f"{schema_name}.{table_name}"] = {
+                        'database_rows': self.get_table_row_count(schema_name, table_name),
+                        'exported_rows': 0,
+                        'difference': -self.get_table_row_count(schema_name, table_name),
+                        'has_binary_file': False,
+                        'error': str(e)
+                    }
+            else:
+                # No binary file, but table exists in database
+                db_count = self.get_table_row_count(schema_name, table_name)
+                if db_count > 0:
+                    data_comparison[f"{schema_name}.{table_name}"] = {
+                        'database_rows': db_count,
+                        'exported_rows': 0,
+                        'difference': -db_count,
+                        'has_binary_file': False
+                    }
+        
+        return data_comparison
+    
     def print_comparison_report(self, comparison: Dict, data_comparison: Dict):
         """Print a detailed comparison report."""
         print("\n" + "="*80)
@@ -686,8 +753,13 @@ class DatabaseComparator:
             comparison = self.compare_objects(exported_files, database_objects)
             
             # Compare data
-            logger.info("Comparing table data...")
-            data_comparison = self.compare_data(exported_files)
+            data_format = self.config.get('data_format', 'sql')  # 'sql' or 'binary'
+            logger.info(f"Comparing table data ({data_format} format)...")
+            
+            if data_format == 'binary':
+                data_comparison = self.compare_binary_data(exported_files)
+            else:
+                data_comparison = self.compare_data(exported_files)
             
             # Print report
             self.print_comparison_report(comparison, data_comparison)
