@@ -470,6 +470,22 @@ def api_format():
             # Align ON onto a new indented line after JOINs
             sql_text = re.sub(r"\s+ON\b", "\n    ON", sql_text, flags=re.IGNORECASE)
 
+            # Put SELECT on its own line and indent select list until FROM
+            def _format_select(match: re.Match) -> str:
+                distinct = match.group(1) or ''
+                select_list = (match.group(2) or '').strip()
+                # Collapse excessive whitespace within select list but keep identifiers
+                select_list = re.sub(r"\s+", " ", select_list)
+                # Break by commas into separate lines
+                select_list = re.sub(r"\s*,\s*", ",\n    ", select_list)
+                header = f"SELECT {distinct}".rstrip()
+                return f"{header}\n    {select_list}\nFROM "
+
+            sql_text = re.sub(r"\bSELECT\b(\s+DISTINCT\s+)?([\s\S]*?)\bFROM\b\s*",
+                              _format_select,
+                              sql_text,
+                              flags=re.IGNORECASE)
+
             return sql_text
 
         def format_chunk(chunk: str) -> str:
