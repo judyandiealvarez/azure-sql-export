@@ -8,6 +8,7 @@ import os
 import json
 import yaml
 import logging
+import re
 import threading
 import time
 from pathlib import Path
@@ -447,19 +448,45 @@ def api_format():
         if current:
             batches.append('\n'.join(current))
 
+        def _post_process(sql_text: str) -> str:
+            # Put DDL AS on its own line for CREATE/ALTER VIEW/PROC/FUNCTION/TRIGGER
+            sql_text = re.sub(
+                r"\b(CREATE|ALTER)\s+(VIEW|PROC|PROCEDURE|FUNCTION|TRIGGER)([\s\S]*?)\s+AS\b",
+                lambda m: f"{m.group(1)} {m.group(2)}{m.group(3)}\nAS",
+                sql_text,
+                flags=re.IGNORECASE,
+            )
+
+            # Force newlines before major clauses
+            clauses = [
+                r"SELECT", r"FROM", r"WHERE", r"GROUP\s+BY", r"ORDER\s+BY", r"HAVING",
+                r"UNION\s+ALL", r"UNION", r"EXCEPT", r"INTERSECT",
+                r"INNER\s+JOIN", r"LEFT\s+OUTER\s+JOIN", r"RIGHT\s+OUTER\s+JOIN", r"FULL\s+OUTER\s+JOIN",
+                r"LEFT\s+JOIN", r"RIGHT\s+JOIN", r"FULL\s+JOIN", r"JOIN",
+            ]
+            for clause in clauses:
+                sql_text = re.sub(rf"\s+({clause})\b", lambda m: f"\n{m.group(1).upper()}", sql_text, flags=re.IGNORECASE)
+
+            # Align ON onto a new indented line after JOINs
+            sql_text = re.sub(r"\s+ON\b", "\n    ON", sql_text, flags=re.IGNORECASE)
+
+            return sql_text
+
         def format_chunk(chunk: str) -> str:
             if chunk.strip().upper() == 'GO':
                 return 'GO'
             if not chunk.strip():
                 return ''
-            return sqlparse.format(
+            formatted = sqlparse.format(
                 chunk,
                 keyword_case=(None if keyword_case == 'preserve' else keyword_case),
                 reindent=reindent,
+                reindent_aligned=reindent,
                 indent_width=indent_width,
                 strip_comments=strip_comments,
                 use_space_around_operators=use_space_around_operators
             ).rstrip()
+            return _post_process(formatted)
 
         formatted_parts = [format_chunk(b) for b in batches]
         # Ensure GO separators are on their own line with single blank line around
