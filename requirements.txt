@@ -4,3 +4,4 @@ PyYAML>=6.0
 pathlib2>=2.3.7; python_version < "3.4"
 Flask>=2.0.0
 Werkzeug>=2.0.0
+sqlparse>=0.4.4

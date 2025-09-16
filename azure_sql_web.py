@@ -202,6 +202,11 @@ def compare_page():
     """Compare page."""
     return render_template('compare.html')
 
+@app.route('/format')
+def format_page():
+    """SQL Formatter page."""
+    return render_template('format.html')
+
 @app.route('/api/export', methods=['POST'])
 def api_export():
     """API endpoint for export operation."""
@@ -403,6 +408,83 @@ def api_download(operation_id):
                 zipf.write(file_path, arcname)
     
     return send_file(temp_zip.name, as_attachment=True, download_name=f'export_{operation_id}.zip')
+
+@app.route('/api/format', methods=['POST'])
+def api_format():
+    """API endpoint to format SQL script using sqlparse."""
+    try:
+        import sqlparse
+
+        # Accept either uploaded file or raw text
+        sql_text = None
+        if 'sql_file' in request.files and request.files['sql_file'].filename:
+            file = request.files['sql_file']
+            sql_text = file.read().decode('utf-8', errors='ignore')
+        elif 'sql_text' in request.form and request.form['sql_text'].strip():
+            sql_text = request.form['sql_text']
+
+        if not sql_text:
+            return jsonify({'error': 'No SQL provided'}), 400
+
+        # Options
+        keyword_case = request.form.get('keyword_case', 'upper')  # upper|lower|capitalize|preserve
+        reindent = request.form.get('reindent', 'true').lower() == 'true'
+        indent_width = int(request.form.get('indent_width', '4'))
+        strip_comments = request.form.get('strip_comments', 'false').lower() == 'true'
+        use_space_around_operators = request.form.get('space_around_operators', 'true').lower() == 'true'
+
+        # Preserve GO separators by splitting and formatting batches separately
+        lines = sql_text.splitlines()
+        batches = []
+        current = []
+        for line in lines:
+            if line.strip().upper() == 'GO':
+                batches.append('\n'.join(current))
+                batches.append('GO')
+                current = []
+            else:
+                current.append(line)
+        if current:
+            batches.append('\n'.join(current))
+
+        def format_chunk(chunk: str) -> str:
+            if chunk.strip().upper() == 'GO':
+                return 'GO'
+            if not chunk.strip():
+                return ''
+            return sqlparse.format(
+                chunk,
+                keyword_case=(None if keyword_case == 'preserve' else keyword_case),
+                reindent=reindent,
+                indent_width=indent_width,
+                strip_comments=strip_comments,
+                use_space_around_operators=use_space_around_operators
+            ).rstrip()
+
+        formatted_parts = [format_chunk(b) for b in batches]
+        # Ensure GO separators are on their own line with single blank line around
+        output_lines = []
+        for part in formatted_parts:
+            if part == '':
+                continue
+            if part == 'GO':
+                # remove trailing blank
+                while output_lines and output_lines[-1] == '':
+                    output_lines.pop()
+                output_lines.append('GO')
+                output_lines.append('')
+            else:
+                output_lines.extend(part.splitlines())
+                output_lines.append('')
+
+        formatted_sql = '\n'.join(output_lines).rstrip() + '\n'
+
+        return jsonify({
+            'formatted_sql': formatted_sql
+        })
+    except Exception as e:
+        logger.error(f"Format API error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

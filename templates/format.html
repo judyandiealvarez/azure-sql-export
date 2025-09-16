@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Format SQL - Azure SQL Database Tools{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-align-left text-secondary me-2"></i>SQL Formatter</h2>
+        <p class="text-muted">Format SQL for readability. Preserves GO batch separators.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-7 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-file-code me-2"></i>Input</h5>
+            </div>
+            <div class="card-body">
+                <form id="formatForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Paste SQL</label>
+                        <textarea class="form-control" id="sqlText" name="sql_text" rows="12" placeholder="Paste your SQL here..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Or upload .sql file</label>
+                        <div class="file-upload-area">
+                            <input type="file" class="form-control" id="sqlFile" name="sql_file" accept=".sql">
+                            <div class="file-list mt-2"></div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Keyword case</label>
+                            <select class="form-select" name="keyword_case" id="keywordCase">
+                                <option value="upper" selected>UPPER</option>
+                                <option value="lower">lower</option>
+                                <option value="capitalize">Capitalize</option>
+                                <option value="preserve">Preserve</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Indent width</label>
+                            <input type="number" min="2" max="8" step="1" class="form-control" name="indent_width" id="indentWidth" value="4">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check me-3">
+                                <input class="form-check-input" type="checkbox" id="reindent" name="reindent" checked>
+                                <label class="form-check-label" for="reindent">Reindent</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="spaceAroundOperators" name="space_around_operators" checked>
+                                <label class="form-check-label" for="spaceAroundOperators">Spaces around operators</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="stripComments" name="strip_comments">
+                            <label class="form-check-label" for="stripComments">Strip comments</label>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-secondary">
+                            <i class="fas fa-magic me-2"></i>Format
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-5 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><i class="fas fa-eye me-2"></i>Preview</h5>
+                <button class="btn btn-outline-secondary btn-sm" id="copyBtn">
+                    <i class="fas fa-copy me-1"></i>Copy
+                </button>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 rounded" id="preview" style="height: 500px; overflow-y: auto; white-space: pre-wrap;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('formatForm');
+    const preview = document.getElementById('preview');
+    const copyBtn = document.getElementById('copyBtn');
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(form);
+        fetch('/api/format', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) throw new Error(data.error);
+                preview.textContent = data.formatted_sql || '';
+            })
+            .catch(err => alert('Error: ' + err.message));
+    });
+
+    copyBtn.addEventListener('click', function() {
+        const text = preview.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            copyBtn.innerHTML = '<i class="fas fa-check me-1"></i>Copied';
+            setTimeout(() => copyBtn.innerHTML = '<i class="fas fa-copy me-1"></i>Copy', 1200);
+        });
+    });
+});
+</script>
+{% endblock %}
+
+
