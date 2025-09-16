@@ -426,12 +426,12 @@ def api_format():
         if not sql_text:
             return jsonify({'error': 'No SQL provided'}), 400
 
-        # Options
+        # Options (HTML checkboxes send "on" when checked; missing when unchecked)
         keyword_case = request.form.get('keyword_case', 'upper')  # upper|lower|capitalize|preserve
-        reindent = request.form.get('reindent', 'true').lower() == 'true'
         indent_width = int(request.form.get('indent_width', '4'))
-        strip_comments = request.form.get('strip_comments', 'false').lower() == 'true'
-        use_space_around_operators = request.form.get('space_around_operators', 'true').lower() == 'true'
+        reindent = 'reindent' in request.form
+        strip_comments = 'strip_comments' in request.form
+        use_space_around_operators = 'space_around_operators' in request.form
 
         # Preserve GO separators by splitting and formatting batches separately
         lines = sql_text.splitlines()
