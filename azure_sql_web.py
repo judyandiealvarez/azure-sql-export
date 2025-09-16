@@ -486,6 +486,42 @@ def api_format():
                               sql_text,
                               flags=re.IGNORECASE)
 
+            # Normalize CTE layout: line breaks and indentation
+            sql_text = re.sub(r"\bAS\s+WITH\b", "AS\nWITH", sql_text, flags=re.IGNORECASE)
+            sql_text = re.sub(r"\bWITH\s+", "WITH\n    ", sql_text, flags=re.IGNORECASE)
+            sql_text = re.sub(r"\b([A-Za-z_][\w\.]*)\s+AS\s*\(", r"\1 AS\n    (", sql_text, flags=re.IGNORECASE)
+            sql_text = re.sub(r"\)\s*,\s*", ")\n,\n    ", sql_text)
+            sql_text = re.sub(r"\)\s*SELECT\b", ")\n\nSELECT", sql_text, flags=re.IGNORECASE)
+
+            # Fine-tune indentation inside simple CTE parentheses
+            lines = sql_text.splitlines()
+            processed = []
+            inside_cte_block = False
+            for i, ln in enumerate(lines):
+                stripped = ln.strip()
+                # Detect opening/closing of a CTE block delimited by a line with "("
+                if stripped == '(':
+                    inside_cte_block = True
+                    processed.append('    (' )
+                    continue
+                if stripped == ')':
+                    inside_cte_block = False
+                    processed.append('    )')
+                    continue
+
+                if inside_cte_block and stripped:
+                    if re.match(r"(?i)^SELECT\b", stripped):
+                        processed.append('        ' + stripped.upper())
+                    elif re.match(r"(?i)^(FROM|WHERE|GROUP BY|ORDER BY|HAVING)\b", stripped):
+                        processed.append('        ' + stripped.upper())
+                    else:
+                        # Likely select list item
+                        processed.append('            ' + stripped)
+                else:
+                    processed.append(ln)
+
+            sql_text = "\n".join(processed)
+
             return sql_text
 
         def format_chunk(chunk: str) -> str:
