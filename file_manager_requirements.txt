@@ -1,0 +1,22 @@
+# Simple File Manager Requirements
+# This application uses only Python standard library modules
+# No additional packages required
+
+# Python 3.6+ required for:
+# - pathlib (Python 3.4+)
+# - f-strings (Python 3.6+)
+# - tkinter (included with Python)
+
+# Standard library modules used:
+# - tkinter (GUI framework)
+# - os (file system operations)
+# - shutil (file operations)
+# - stat (file statistics)
+# - pathlib (path handling)
+# - datetime (date/time formatting)
+
+# To run the application:
+# python file_manager.py
+
+# Optional: For better performance on Windows, you can install:
+# pip install pillow  # For better image handling if needed in future
