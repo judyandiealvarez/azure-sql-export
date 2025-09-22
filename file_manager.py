@@ -10,6 +10,7 @@ import shutil
 import stat
 from pathlib import Path
 import datetime
+import subprocess
 
 
 class FileManager:
@@ -119,6 +120,16 @@ class FileManager:
                                  variable=self.hidden_var,
                                  command=self.toggle_hidden_files)
         
+        # Git menu
+        git_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Git", menu=git_menu)
+        git_menu.add_command(label="Clone Repository", command=self.git_clone)
+        git_menu.add_command(label="Pull Changes", command=self.git_pull)
+        git_menu.add_command(label="Add All & Commit", command=self.git_commit_all)
+        git_menu.add_command(label="Push Changes", command=self.git_push)
+        git_menu.add_separator()
+        git_menu.add_command(label="Git Status", command=self.git_status)
+        
         # Help menu
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
@@ -191,6 +202,21 @@ class FileManager:
                                         command=self.toggle_hidden_files)
         hidden_checkbox.pack(side=tk.LEFT, padx=2)
         hidden_checkbox.configure(takefocus=False)
+        
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+        
+        # Git buttons
+        git_pull_btn = ttk.Button(toolbar, text="Git Pull", command=self.git_pull)
+        git_pull_btn.pack(side=tk.LEFT, padx=2)
+        git_pull_btn.configure(takefocus=False)
+        
+        git_commit_btn = ttk.Button(toolbar, text="Git Commit", command=self.git_commit_all)
+        git_commit_btn.pack(side=tk.LEFT, padx=2)
+        git_commit_btn.configure(takefocus=False)
+        
+        git_push_btn = ttk.Button(toolbar, text="Git Push", command=self.git_push)
+        git_push_btn.pack(side=tk.LEFT, padx=2)
+        git_push_btn.configure(takefocus=False)
         
     def bind_f_keys(self):
         """Bind F-key shortcuts like Double Commander"""
@@ -555,33 +581,63 @@ class FileManager:
         path_var.set(current_dir)
         
         try:
+            # Force directory refresh by accessing it
+            os.listdir(current_dir)
+            
             # Add parent directory entry
             if current_dir != os.path.dirname(current_dir):
                 tree.insert("", 0, text="..", values=("", ""))
                 
-            # Get directory contents
+            # Get directory contents with forced refresh
             items = []
-            for item in os.listdir(current_dir):
-                # Filter hidden files based on setting
-                if not self.show_hidden_files and item.startswith('.'):
-                    continue
-                    
-                item_path = os.path.join(current_dir, item)
-                try:
-                    stat_info = os.stat(item_path)
-                    size = ""
-                    if os.path.isfile(item_path):
-                        size = self.format_size(stat_info.st_size)
-                    
-                    modified = datetime.datetime.fromtimestamp(stat_info.st_mtime).strftime("%Y-%m-%d %H:%M")
-                    
-                    # Determine if it's a directory
-                    is_dir = os.path.isdir(item_path)
-                    icon = "📁" if is_dir else "📄"
-                    
-                    items.append((item, size, modified, is_dir, icon))
-                except (OSError, PermissionError):
-                    continue
+            try:
+                # Use os.scandir for better performance and to force refresh
+                with os.scandir(current_dir) as entries:
+                    for entry in entries:
+                        item = entry.name
+                        # Filter hidden files based on setting
+                        if not self.show_hidden_files and item.startswith('.'):
+                            continue
+                            
+                        item_path = entry.path
+                        try:
+                            stat_info = entry.stat()
+                            size = ""
+                            if entry.is_file():
+                                size = self.format_size(stat_info.st_size)
+                            
+                            modified = datetime.datetime.fromtimestamp(stat_info.st_mtime).strftime("%Y-%m-%d %H:%M")
+                            
+                            # Determine if it's a directory
+                            is_dir = entry.is_dir()
+                            icon = "📁" if is_dir else "📄"
+                            
+                            items.append((item, size, modified, is_dir, icon))
+                        except (OSError, PermissionError):
+                            continue
+            except OSError:
+                # Fallback to os.listdir if scandir fails
+                for item in os.listdir(current_dir):
+                    # Filter hidden files based on setting
+                    if not self.show_hidden_files and item.startswith('.'):
+                        continue
+                        
+                    item_path = os.path.join(current_dir, item)
+                    try:
+                        stat_info = os.stat(item_path)
+                        size = ""
+                        if os.path.isfile(item_path):
+                            size = self.format_size(stat_info.st_size)
+                        
+                        modified = datetime.datetime.fromtimestamp(stat_info.st_mtime).strftime("%Y-%m-%d %H:%M")
+                        
+                        # Determine if it's a directory
+                        is_dir = os.path.isdir(item_path)
+                        icon = "📁" if is_dir else "📄"
+                        
+                        items.append((item, size, modified, is_dir, icon))
+                    except (OSError, PermissionError):
+                        continue
                     
             # Sort items (directories first, then files)
             items.sort(key=lambda x: (not x[3], x[0].lower()))
@@ -606,6 +662,11 @@ class FileManager:
             elif children and panel_name != self.active_panel:
                 # Clear selection from inactive panel
                 tree.selection_remove(tree.selection())
+            
+            # Force multiple updates to ensure refresh
+            tree.update_idletasks()
+            tree.update()
+            self.root.update_idletasks()
                 
         except (OSError, PermissionError) as e:
             messagebox.showerror("Error", f"Cannot access directory: {e}")
@@ -622,8 +683,10 @@ class FileManager:
         
     def refresh_panels(self):
         """Refresh both panels"""
+        self.status_var.set("Refreshing panels...")
         self.refresh_panel("left")
         self.refresh_panel("right")
+        self.status_var.set("Panels refreshed")
         
     def format_size(self, size_bytes):
         """Format file size in human readable format"""
@@ -756,6 +819,20 @@ class FileManager:
                 new_path = os.path.join(current_dir, folder_name)
                 os.makedirs(new_path, exist_ok=True)
                 self.refresh_panel(self.active_panel)
+                
+                # Find and select the newly created folder
+                tree = self.left_tree if self.active_panel == "left" else self.right_tree
+                children = tree.get_children()
+                for child in children:
+                    item_text = tree.item(child, "text")
+                    # Remove emoji prefix if present
+                    clean_name = item_text.replace("📁 ", "").replace("📄 ", "")
+                    if clean_name == folder_name:
+                        tree.selection_set(child)
+                        tree.focus(child)
+                        tree.see(child)
+                        break
+                
                 self.status_var.set(f"Created folder: {folder_name}")
             except Exception as e:
                 messagebox.showerror("Error", f"Create folder failed: {e}")
@@ -771,6 +848,20 @@ class FileManager:
                 with open(new_path, 'w') as f:
                     pass
                 self.refresh_panel(self.active_panel)
+                
+                # Find and select the newly created file
+                tree = self.left_tree if self.active_panel == "left" else self.right_tree
+                children = tree.get_children()
+                for child in children:
+                    item_text = tree.item(child, "text")
+                    # Remove emoji prefix if present
+                    clean_name = item_text.replace("📁 ", "").replace("📄 ", "")
+                    if clean_name == file_name:
+                        tree.selection_set(child)
+                        tree.focus(child)
+                        tree.see(child)
+                        break
+                
                 self.status_var.set(f"Created file: {file_name}")
             except Exception as e:
                 messagebox.showerror("Error", f"Create file failed: {e}")
@@ -788,6 +879,148 @@ class FileManager:
     def show_about(self):
         """Show about dialog"""
         messagebox.showinfo("About", "Simple File Manager\nA dual-pane file manager\nVersion 1.0")
+        
+    def run_git_command(self, command, cwd=None):
+        """Run a git command and return the result"""
+        try:
+            if cwd is None:
+                cwd = os.getcwd()
+            
+            result = subprocess.run(
+                command, 
+                shell=True, 
+                cwd=cwd, 
+                capture_output=True, 
+                text=True, 
+                timeout=30
+            )
+            return result.returncode == 0, result.stdout, result.stderr
+        except subprocess.TimeoutExpired:
+            return False, "", "Command timed out"
+        except Exception as e:
+            return False, "", str(e)
+    
+    def git_clone(self):
+        """Clone a git repository"""
+        url = simpledialog.askstring("Git Clone", "Enter repository URL:")
+        if url:
+            # Use current active panel directory
+            current_dir = self.get_current_dir(self.active_panel)
+            success, stdout, stderr = self.run_git_command(f"git clone {url}", cwd=current_dir)
+            if success:
+                messagebox.showinfo("Success", f"Repository cloned successfully!\n{stdout}")
+                # Refresh both panels to show the new repository
+                self.refresh_panels()
+                # Switch to the cloned repository directory
+                self.navigate_to_cloned_repo(current_dir, url)
+            else:
+                messagebox.showerror("Error", f"Clone failed:\n{stderr}")
+    
+    def navigate_to_cloned_repo(self, parent_dir, repo_url):
+        """Navigate to the cloned repository directory"""
+        try:
+            # Extract repository name from URL
+            repo_name = repo_url.split('/')[-1]
+            if repo_name.endswith('.git'):
+                repo_name = repo_name[:-4]
+            
+            # Construct the path to the cloned repository
+            repo_path = os.path.join(parent_dir, repo_name)
+            
+            # Check if the repository directory exists
+            if os.path.exists(repo_path):
+                # Navigate to the repository directory
+                self.navigate_to_directory(self.active_panel, repo_path)
+                self.status_var.set(f"Navigated to cloned repository: {repo_name}")
+            else:
+                self.status_var.set("Repository cloned but directory not found")
+        except Exception as e:
+            self.status_var.set(f"Error navigating to cloned repository: {e}")
+    
+    def navigate_to_directory(self, panel_name, directory_path):
+        """Navigate to a specific directory"""
+        try:
+            # Update the path entry
+            if panel_name == "left":
+                self.left_path_var.set(directory_path)
+                self.left_current_dir = directory_path
+            else:
+                self.right_path_var.set(directory_path)
+                self.right_current_dir = directory_path
+            
+            # Refresh the panel to show the new directory
+            self.refresh_panel(panel_name)
+            
+            # Set focus to the panel
+            tree = self.left_tree if panel_name == "left" else self.right_tree
+            tree.focus_force()
+            
+        except Exception as e:
+            self.status_var.set(f"Error navigating to directory: {e}")
+    
+    def git_pull(self):
+        """Pull changes from remote repository"""
+        current_dir = self.get_current_dir(self.active_panel)
+        success, stdout, stderr = self.run_git_command("git pull", cwd=current_dir)
+        if success:
+            messagebox.showinfo("Success", f"Pull successful!\n{stdout}")
+            self.refresh_panels()
+        else:
+            messagebox.showerror("Error", f"Pull failed:\n{stderr}")
+    
+    def git_commit_all(self):
+        """Add all files and commit"""
+        current_dir = self.get_current_dir(self.active_panel)
+        
+        # Get commit message
+        message = simpledialog.askstring("Git Commit", "Enter commit message:")
+        if not message:
+            return
+            
+        # Add all files
+        success, stdout, stderr = self.run_git_command("git add .", cwd=current_dir)
+        if not success:
+            messagebox.showerror("Error", f"Add failed:\n{stderr}")
+            return
+            
+        # Commit
+        success, stdout, stderr = self.run_git_command(f'git commit -m "{message}"', cwd=current_dir)
+        if success:
+            messagebox.showinfo("Success", f"Commit successful!\n{stdout}")
+            self.refresh_panels()
+        else:
+            messagebox.showerror("Error", f"Commit failed:\n{stderr}")
+    
+    def git_push(self):
+        """Push changes to remote repository"""
+        current_dir = self.get_current_dir(self.active_panel)
+        success, stdout, stderr = self.run_git_command("git push", cwd=current_dir)
+        if success:
+            messagebox.showinfo("Success", f"Push successful!\n{stdout}")
+        else:
+            messagebox.showerror("Error", f"Push failed:\n{stderr}")
+    
+    def git_status(self):
+        """Show git status"""
+        current_dir = self.get_current_dir(self.active_panel)
+        success, stdout, stderr = self.run_git_command("git status", cwd=current_dir)
+        if success:
+            # Create a new window to show status
+            status_window = tk.Toplevel(self.root)
+            status_window.title("Git Status")
+            status_window.geometry("600x400")
+            
+            text_widget = tk.Text(status_window, wrap=tk.WORD)
+            text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            text_widget.insert(tk.END, stdout)
+            text_widget.config(state=tk.DISABLED)
+            
+            # Add scrollbar
+            scrollbar = ttk.Scrollbar(status_window, orient=tk.VERTICAL, command=text_widget.yview)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            text_widget.configure(yscrollcommand=scrollbar.set)
+        else:
+            messagebox.showerror("Error", f"Status failed:\n{stderr}")
 
 
 def main():

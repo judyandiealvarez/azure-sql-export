@@ -15,7 +15,7 @@
 </div>
 
 <div class="row">
-    <div class="col-md-4 mb-4">
+    <div class="col-md-3 mb-4">
         <div class="card h-100">
             <div class="card-header">
                 <h5 class="card-title mb-0">
@@ -39,7 +39,7 @@
         </div>
     </div>
 
-    <div class="col-md-4 mb-4">
+    <div class="col-md-3 mb-4">
         <div class="card h-100">
             <div class="card-header">
                 <h5 class="card-title mb-0">
@@ -63,7 +63,7 @@
         </div>
     </div>
 
-    <div class="col-md-4 mb-4">
+    <div class="col-md-3 mb-4">
         <div class="card h-100">
             <div class="card-header">
                 <h5 class="card-title mb-0">
@@ -82,6 +82,29 @@
             <div class="card-footer">
                 <a href="{{ url_for('compare_page') }}" class="btn btn-info">
                     <i class="fas fa-balance-scale me-2"></i>Start Compare
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-clone text-warning me-2"></i>Copy Data
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">Copy table data from a source database to a target database using config-defined or uploaded table lists.</p>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success me-2"></i>Tables from config/file</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Optional truncate</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Identity insert auto</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Batch copy</li>
+                </ul>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('copy_page') }}" class="btn btn-warning">
+                    <i class="fas fa-clone me-2"></i>Start Copy
                 </a>
             </div>
         </div>

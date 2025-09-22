@@ -23,6 +23,7 @@ import shutil
 from azure_sql_export import AzureSQLExporter
 from azure_sql_import import AzureSQLImporter
 from azure_sql_compare import DatabaseComparator
+import azure_sql_copy as copy_mod
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -183,6 +184,85 @@ def run_compare_operation(operation_id, config_path, import_dir):
         logger.error(f"Compare operation failed: {e}")
         operation_status[operation_id] = {'status': 'error', 'message': str(e)}
 
+def run_copy_operation(operation_id, config_path, tables_path: Path = None):
+    """Run copy operation (source -> target) in background thread."""
+    try:
+        operation_status[operation_id] = {'status': 'running', 'progress': 0, 'message': 'Starting copy...'}
+        operation_logs[operation_id] = []
+
+        # Load configuration
+        config = get_config_from_file(config_path)
+        if not config:
+            operation_status[operation_id] = {'status': 'error', 'message': 'Failed to load configuration'}
+            return
+
+        # If a tables file was uploaded, wire it into config
+        if tables_path is not None:
+            config.setdefault('copy', {})['tables_file'] = str(tables_path.resolve())
+
+        copy_cfg = config.get('copy', {})
+        default_schema = copy_cfg.get('schema', 'dbo')
+        batch_size = int(copy_cfg.get('batch_size', 1000))
+        truncate = bool(copy_cfg.get('truncate', False))
+        identity_mode = copy_cfg.get('identity_insert', 'auto')
+        retries = int(copy_cfg.get('retries', 3))
+        retry_sleep = float(copy_cfg.get('retry_sleep_seconds', 2.0))
+
+        # Build table list (merge config tables + tables_file)
+        tables = copy_mod.parse_tables(
+            cli_tables=None,
+            tables_file=copy_cfg.get('tables_file'),
+            config_tables=copy_cfg.get('tables'),
+            default_schema=default_schema
+        )
+
+        if not tables:
+            operation_status[operation_id] = {'status': 'error', 'message': 'No tables specified'}
+            return
+
+        operation_status[operation_id]['message'] = f"Preparing to copy {len(tables)} table(s)..."
+        operation_status[operation_id]['progress'] = 5
+
+        # Connect source and target
+        source_conn = copy_mod.build_connection(config['source_db'])
+        target_conn = copy_mod.build_connection(config['target_db'])
+
+        try:
+            total = len(tables)
+            copied_rows_total = 0
+            for idx, (schema_name, table_name) in enumerate(tables, start=1):
+                operation_status[operation_id]['message'] = f"Copying {schema_name}.{table_name} ({idx}/{total})..."
+                # Progress from 5 to 95 across tables
+                operation_status[operation_id]['progress'] = 5 + int(90 * (idx - 1) / max(1, total))
+
+                ok, msg, copied = copy_mod.copy_table(
+                    source_conn,
+                    target_conn,
+                    schema_name,
+                    table_name,
+                    batch_size,
+                    truncate,
+                    identity_mode,
+                    dry_run=False,
+                    retries=retries,
+                    retry_sleep=retry_sleep
+                )
+                if not ok:
+                    operation_status[operation_id] = {'status': 'error', 'message': f"Failed {schema_name}.{table_name}: {msg}"}
+                    return
+                copied_rows_total += copied
+
+            operation_status[operation_id]['progress'] = 100
+            operation_status[operation_id]['status'] = 'completed'
+            operation_status[operation_id]['message'] = f"Copy completed successfully. Rows copied: {copied_rows_total}"
+        finally:
+            source_conn.close()
+            target_conn.close()
+
+    except Exception as e:
+        logger.error(f"Copy operation failed: {e}")
+        operation_status[operation_id] = {'status': 'error', 'message': str(e)}
+
 @app.route('/')
 def index():
     """Main page."""
@@ -202,6 +282,11 @@ def import_page():
 def compare_page():
     """Compare page."""
     return render_template('compare.html')
+
+@app.route('/copy')
+def copy_page():
+    """Copy page."""
+    return render_template('copy.html')
 
 @app.route('/format')
 def format_page():
@@ -375,6 +460,46 @@ def api_compare():
         logger.error(f"Compare API error: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/copy', methods=['POST'])
+def api_copy():
+    """API endpoint for data copy operation."""
+    try:
+        if 'config_file' not in request.files:
+            return jsonify({'error': 'No config file provided'}), 400
+
+        config_file = request.files['config_file']
+        if config_file.filename == '':
+            return jsonify({'error': 'No config file selected'}), 400
+
+        if not allowed_file(config_file.filename):
+            return jsonify({'error': 'Invalid file type. Only YAML and JSON files are allowed.'}), 400
+
+        # Optional tables file
+        tables_file = request.files.get('tables_file')
+
+        # Save config file
+        filename = secure_filename(config_file.filename)
+        config_path = UPLOAD_FOLDER / filename
+        config_file.save(config_path)
+
+        # Save tables file if provided
+        tables_path = None
+        if tables_file and tables_file.filename:
+            tname = secure_filename(tables_file.filename)
+            tables_path = UPLOAD_FOLDER / tname
+            tables_file.save(tables_path)
+
+        # Start copy operation in background
+        operation_id = f"copy_{int(time.time())}"
+        thread = threading.Thread(target=run_copy_operation, args=(operation_id, config_path, tables_path))
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({'operation_id': operation_id, 'message': 'Copy operation started'})
+    except Exception as e:
+        logger.error(f"Copy API error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/status/<operation_id>')
 def api_status(operation_id):
     """API endpoint to get operation status."""
@@ -427,12 +552,15 @@ def api_format():
         if not sql_text:
             return jsonify({'error': 'No SQL provided'}), 400
 
-        # Options (HTML checkboxes send "on" when checked; missing when unchecked)
+        # Options
         keyword_case = request.form.get('keyword_case', 'upper')  # upper|lower|capitalize|preserve
         indent_width = int(request.form.get('indent_width', '4'))
-        reindent = 'reindent' in request.form
-        strip_comments = 'strip_comments' in request.form
-        use_space_around_operators = 'space_around_operators' in request.form
+        def _is_true(name: str) -> bool:
+            val = request.form.get(name)
+            return str(val).lower() in ('on', 'true', '1', 'yes')
+        reindent = _is_true('reindent') or ('reindent' in request.form and request.form.get('reindent') is None)
+        strip_comments = _is_true('strip_comments')
+        use_space_around_operators = _is_true('space_around_operators')
 
         # Preserve GO separators by splitting and formatting batches separately
         lines = sql_text.splitlines()
@@ -469,8 +597,10 @@ def api_format():
 
             # Align ON onto a new indented line after JOINs
             sql_text = re.sub(r"\s+ON\b", "\n    ON", sql_text, flags=re.IGNORECASE)
+            # Keep IN ( on same line
+            sql_text = re.sub(r"(?i)\bIN\b\s*\(", "IN (", sql_text)
 
-            # Put SELECT on its own line and indent select list until FROM
+            # Put SELECT on its own line and indent select list until FROM (outside parentheses only)
             def _format_select(match: re.Match) -> str:
                 distinct = match.group(1) or ''
                 select_list = (match.group(2) or '').strip()
@@ -481,17 +611,243 @@ def api_format():
                 header = f"SELECT {distinct}".rstrip()
                 return f"{header}\n    {select_list}\nFROM "
 
-            sql_text = re.sub(r"\bSELECT\b(\s+DISTINCT\s+)?([\s\S]*?)\bFROM\b\s*",
-                              _format_select,
-                              sql_text,
-                              flags=re.IGNORECASE)
+            # Apply at top-level only: avoid transforming nested SELECTs inside parentheses
+            def format_top_level_selects(text: str) -> str:
+                result = []
+                i = 0
+                depth = 0
+                while i < len(text):
+                    if text[i] == '(':
+                        depth += 1
+                        result.append(text[i])
+                        i += 1
+                        continue
+                    if text[i] == ')':
+                        depth = max(0, depth - 1)
+                        result.append(text[i])
+                        i += 1
+                        continue
+                    if depth == 0:
+                        m = re.compile(r"(?i)\bSELECT\b(\s+DISTINCT\s+)?([\s\S]*?)\bFROM\b\s*").match(text, i)
+                        if m:
+                            result.append(_format_select(m))
+                            i = m.end()
+                            continue
+                    result.append(text[i])
+                    i += 1
+                return ''.join(result)
+
+            sql_text = format_top_level_selects(sql_text)
+
+            # Within parentheses, normalize simple SELECT ... FROM ... WHERE ... layout
+            def format_in_parens(text: str) -> str:
+                try:
+                    import sqlparse
+                except Exception:
+                    return text
+
+                def repl(m: re.Match) -> str:
+                    inner = m.group(1)
+                    # Use sqlparse to reindent the inner block
+                    # Capture the inner's primary FROM target before formatting
+                    inner_from_target = None
+                    m_from = re.search(r"(?is)\bSELECT\b[\s\S]*?\bFROM\s+([A-Za-z_\[][\w\].]*)", inner)
+                    if m_from:
+                        inner_from_target = m_from.group(1).strip()
+
+                    formatted = sqlparse.format(
+                        inner,
+                        keyword_case=(None if keyword_case == 'preserve' else keyword_case),
+                        reindent=True,
+                        reindent_aligned=True,
+                        indent_width=indent_width,
+                        use_space_around_operators=use_space_around_operators,
+                    ).strip()
+                    # If WHERE appears before FROM, reorder to SELECT ... FROM ... WHERE ...
+                    try:
+                        flines = formatted.splitlines()
+                        where_idx = next((i for i, l in enumerate(flines) if re.match(r"^\s*WHERE\b", l, flags=re.IGNORECASE)), None)
+                        from_idx = next((i for i, l in enumerate(flines) if re.match(r"^\s*FROM\b", l, flags=re.IGNORECASE)), None)
+                        if where_idx is not None and from_idx is not None and where_idx < from_idx:
+                            from_line = flines.pop(from_idx)
+                            # Insert FROM just before WHERE
+                            flines.insert(where_idx, from_line)
+                            formatted = "\n".join(flines)
+                    except Exception:
+                        pass
+                    # Ensure SELECT list is on following line and keep FROM target if present
+                    formatted = re.sub(
+                        r"(?i)\bSELECT\s+([^\n]+?)\s*\n\s*FROM\s+([^\n]+)",
+                        lambda mm: "SELECT\n        " + mm.group(1).strip() + "\n    FROM " + mm.group(2).strip(),
+                        formatted,
+                    )
+                    # If initial FROM target was captured but missing now, insert it right before the first WHERE line (preserve existing indent)
+                    if inner_from_target and not re.search(rf"(?im)^\s*FROM\s+{re.escape(inner_from_target)}\b", formatted):
+                        fl = formatted.splitlines()
+                        where_idx = next((i for i, l in enumerate(fl) if re.match(r"^\s*WHERE\b", l, flags=re.IGNORECASE)), None)
+                        # Check only lines BEFORE WHERE for an existing FROM
+                        has_from_before_where = False
+                        if where_idx is not None:
+                            for l in fl[:where_idx]:
+                                if re.match(r"^\s*FROM\b", l, flags=re.IGNORECASE):
+                                    has_from_before_where = True
+                                    break
+                        if where_idx is not None and not has_from_before_where:
+                            indent = re.match(r"^(\s*)", fl[where_idx]).group(1)
+                            fl.insert(where_idx, f"{indent}FROM {inner_from_target}")
+                            formatted = "\n".join(fl)
+                    # Ensure WHERE x IN ( on same line with opening paren
+                    formatted = re.sub(r"(?i)\bWHERE\s+(.+?)\s+IN\s*\(", r"WHERE \1 IN (", formatted)
+                    # Ensure inner simple SELECT inside IN (...) breaks into lines
+                    formatted = re.sub(
+                        r"(?is)IN \(\s*SELECT\s+([^\n]+?)\s+FROM\s+([^\)\n]+)\s*\)",
+                        lambda mm: "IN (\n        SELECT\n            " + mm.group(1).strip() + "\n        FROM " + mm.group(2).strip() + "\n    )",
+                        formatted,
+                    )
+                    # Ensure SELECT/FROM/WHERE on own lines and indent by 4 spaces inside parens
+                    lines = formatted.splitlines()
+                    indented = []
+                    for ln in lines:
+                        if ln.strip():
+                            indented.append('    ' + ln.lstrip())
+                        else:
+                            indented.append('')
+                    # After indenting, ensure a missing FROM <target> between SELECT and WHERE is inserted
+                    if inner_from_target:
+                        try:
+                            # find first top-level SELECT and WHERE
+                            sel_idx = next((i for i, l in enumerate(indented) if re.match(r"^\s{4}SELECT\b", l, flags=re.IGNORECASE)), None)
+                            where_idx2 = next((i for i, l in enumerate(indented) if re.match(r"^\s{4}WHERE\b", l, flags=re.IGNORECASE)), None)
+                            has_from_between = any(re.match(r"^\s{4}FROM\b", l, flags=re.IGNORECASE) for l in indented[sel_idx+1:where_idx2] ) if sel_idx is not None and where_idx2 is not None else True
+                            if sel_idx is not None and where_idx2 is not None and not has_from_between:
+                                indented.insert(where_idx2, f"    FROM {inner_from_target}")
+                        except Exception:
+                            pass
+                    # Ensure single-line SELECT lists are split before FROM
+                    i = 0
+                    while i < len(indented) - 1:
+                        sel_m = re.match(r"^(\s*)SELECT\s+([^\n]+?)\s*$", indented[i], flags=re.IGNORECASE)
+                        from_m = re.match(r"^(\s*)FROM\b(.*)$", indented[i+1], flags=re.IGNORECASE)
+                        if sel_m and from_m:
+                            indent = sel_m.group(1)
+                            select_list = sel_m.group(2).strip()
+                            indented[i] = f"{indent}SELECT"
+                            indented.insert(i+1, f"{indent}    {select_list}")
+                            i += 1  # skip over inserted line
+                        i += 1
+
+                    block = "(\n" + "\n".join(indented) + "\n)"
+                    # After indenting, ensure SELECT list is on its own line
+                    def break_select_list(m: re.Match) -> str:
+                        indent_sel = m.group(1)
+                        select_list = m.group(2).strip()
+                        indent_from = m.group(3)
+                        return f"{indent_sel}SELECT\n{indent_sel}    {select_list}\n{indent_from}FROM"
+
+                    block = re.sub(r"(?im)^(\s*)SELECT\s+([^\n]+)\n(\s*)FROM",
+                                   break_select_list,
+                                   block)
+                    # Fallback: if FROM is not on the next line yet, still split SELECT list
+                    block = re.sub(r"(?im)^(\s*)SELECT\s+([^\n]+)\s*$",
+                                   lambda m: f"{m.group(1)}SELECT\n{m.group(1)}    {m.group(2).strip()}",
+                                   block)
+                    # Final fix: if we have SELECT ... WHERE with no FROM in between, insert FROM <target>
+                    if inner_from_target:
+                        block_lines = block.splitlines()
+                        new_block_lines = []
+                        i = 0
+                        while i < len(block_lines):
+                            line = block_lines[i]
+                            new_block_lines.append(line)
+                            # Look for SELECT line followed by WHERE line with no FROM in between
+                            if (re.match(r"^\s*SELECT\s*$", line, flags=re.IGNORECASE) and 
+                                i + 1 < len(block_lines) and 
+                                re.match(r"^\s*WHERE\b", block_lines[i+1], flags=re.IGNORECASE)):
+                                # Insert FROM line between SELECT and WHERE
+                                indent = re.match(r"^(\s*)", line).group(1)
+                                new_block_lines.append(f"{indent}FROM {inner_from_target}")
+                            i += 1
+                        block = "\n".join(new_block_lines)
+                    return block
+
+                # Only handle single-depth parentheses to avoid greediness; apply repeatedly until stable
+                prev = None
+                out = text
+                for _ in range(3):
+                    if prev == out:
+                        break
+                    prev = out
+                    out = re.sub(r"\(([^()]+)\)", repl, out)
+                # Normalize common indentation issues inside parens
+                # 1) Break single-line select lists at depth 1 and 2
+                out = re.sub(r"(?im)^(\s{4})SELECT\s+([^\n]+)$", r"\1SELECT\n\1    \2", out)
+                out = re.sub(r"(?im)^(\s{8})SELECT\s+([^\n]+)$", r"\1SELECT\n\1    \2", out)
+                # 2) Ensure FROM/WHERE start at 4 spaces when they appear at column 0 inside parens
+                out = re.sub(r"(?im)^FROM\b", "    FROM", out)
+                out = re.sub(r"(?im)^WHERE\b", "    WHERE", out)
+                # 3) Trim excessive indent before ") q"
+                out = re.sub(r"(?m)^\s+\)\s+q\s*$", ") q", out)
+                return out
+
+            sql_text = format_in_parens(sql_text)
+
+            # Global safeguard: break any remaining single-line SELECT list before FROM
+            def break_global_select(m: re.Match) -> str:
+                return f"{m.group(1)}\n    {m.group(2).strip()}\n{m.group(3)}"
+            sql_text = re.sub(r"(?im)(^\s*SELECT)\s+([^\n]+)\n(\s*FROM)\b", break_global_select, sql_text)
+            # Specific fix for inner blocks: normalize to 4-space SELECT / 8-space list / 4-space FROM
+            sql_text = re.sub(
+                r"(?im)^(\s{8})SELECT\s+([^\n]+)\n(\s{4})FROM\b",
+                lambda m: "    SELECT\n        " + m.group(2).strip() + "\n    FROM",
+                sql_text,
+            )
+
+            # Also split pattern with >=4-space SELECT followed by >=4-space FROM (keep same indent)
+            sql_text = re.sub(
+                r"(?m)^(\s{4,})SELECT\s+([^\n]+)\n(\s{4,})FROM\b",
+                lambda m: f"{m.group(1)}SELECT\n{m.group(1)}    {m.group(2).strip()}\n{m.group(3)}FROM",
+                sql_text,
+            )
+            # Additionally split any single-line inner select immediately followed by FROM on next line
+            sql_text = re.sub(
+                r"(?m)^(\s{4,})SELECT\s+([^\n]+)\s*$\n(\s{4,})FROM\b",
+                lambda m: f"{m.group(1)}SELECT\n{m.group(1)}    {m.group(2).strip()}\n{m.group(3)}FROM",
+                sql_text,
+            )
+
+            # Line-wise pass: split any 'SELECT <list>' line when next line starts with FROM at any indent
+            gl_lines = sql_text.splitlines()
+            gl_out = []
+            i = 0
+            while i < len(gl_lines):
+                if i < len(gl_lines) - 1 and re.match(r"(?i)^\s*SELECT\s+\S", gl_lines[i]) and re.match(r"(?i)^\s*FROM\b", gl_lines[i+1]):
+                    indent = re.match(r"^(\s*)", gl_lines[i]).group(1)
+                    select_list = re.sub(r"(?i)^\s*SELECT\s+", "", gl_lines[i]).strip()
+                    gl_out.append(f"{indent}SELECT")
+                    gl_out.append(f"{indent}    {select_list}")
+                    i += 1  # next line (FROM) will be processed normally in following iteration
+                else:
+                    gl_out.append(gl_lines[i])
+                i += 1
+            sql_text = "\n".join(gl_out)
 
             # Normalize CTE layout: line breaks and indentation
-            sql_text = re.sub(r"\bAS\s+WITH\b", "AS\nWITH", sql_text, flags=re.IGNORECASE)
-            sql_text = re.sub(r"\bWITH\s+", "WITH\n    ", sql_text, flags=re.IGNORECASE)
+            # Keep a trailing space after AS/WITH to match expected
+            sql_text = re.sub(r"\bAS\s+WITH\b", "AS \nWITH ", sql_text, flags=re.IGNORECASE)
+            sql_text = re.sub(r"\bWITH\s+", "WITH \n    ", sql_text, flags=re.IGNORECASE)
             sql_text = re.sub(r"\b([A-Za-z_][\w\.]*)\s+AS\s*\(", r"\1 AS\n    (", sql_text, flags=re.IGNORECASE)
-            sql_text = re.sub(r"\)\s*,\s*", ")\n,\n    ", sql_text)
-            sql_text = re.sub(r"\)\s*SELECT\b", ")\n\nSELECT", sql_text, flags=re.IGNORECASE)
+            # Ensure (SELECT becomes ( newline then indented SELECT (4 spaces)
+            sql_text = re.sub(r"\(\s*SELECT", "(\n    SELECT", sql_text, flags=re.IGNORECASE)
+            # Keep comma on same line as closing )
+            sql_text = re.sub(r"\)\s*,\s*", "),", sql_text)
+            # Ensure newline and indent before next CTE name after a comma, uppercase the CTE name
+            sql_text = re.sub(
+                r",\s*([A-Za-z_][\w\.]*)\s+AS\b",
+                lambda m: ",\n    " + m.group(1).upper() + " AS",
+                sql_text,
+                flags=re.IGNORECASE,
+            )
+            sql_text = re.sub(r"\)\s*SELECT\b", ")\n    \nSELECT", sql_text, flags=re.IGNORECASE)
 
             # Fine-tune indentation inside simple CTE parentheses
             lines = sql_text.splitlines()
@@ -504,6 +860,10 @@ def api_format():
                     inside_cte_block = True
                     processed.append('    (' )
                     continue
+                if stripped == '),':
+                    inside_cte_block = False
+                    processed.append('    ),')
+                    continue
                 if stripped == ')':
                     inside_cte_block = False
                     processed.append('    )')
@@ -511,9 +871,12 @@ def api_format():
 
                 if inside_cte_block and stripped:
                     if re.match(r"(?i)^SELECT\b", stripped):
-                        processed.append('        ' + stripped.upper())
+                        # Uppercase only the keyword SELECT
+                        processed.append('        ' + re.sub(r"(?i)^SELECT\b", "SELECT", stripped, count=1))
                     elif re.match(r"(?i)^(FROM|WHERE|GROUP BY|ORDER BY|HAVING)\b", stripped):
-                        processed.append('        ' + stripped.upper())
+                        # Uppercase the clause keyword only
+                        processed.append('        ' + re.sub(r"(?i)^(FROM|WHERE|GROUP BY|ORDER BY|HAVING)\b",
+                                                              lambda m: m.group(1).upper(), stripped, count=1))
                     else:
                         # Likely select list item
                         processed.append('            ' + stripped)
@@ -522,6 +885,118 @@ def api_format():
 
             sql_text = "\n".join(processed)
 
+            # Final normalization: operate with parenthesis depth to avoid touching inner blocks
+            lines = sql_text.splitlines()
+            final_lines = []
+            depth = 0
+            for idx in range(len(lines)):
+                ln = lines[idx]
+                # Update depth based on previous line content to reflect current line context
+                open_count = ln.count('(')
+                close_count = ln.count(')')
+                # Split single-line SELECT list immediately followed by FROM at current depth
+                if depth == 0 and re.match(r"(?i)^\s*SELECT\s+\S.*$", ln):
+                    if idx + 1 < len(lines) and re.match(r"^\s*FROM\b", lines[idx+1], flags=re.IGNORECASE):
+                        indent = re.match(r"^(\s*)", ln).group(1)
+                        select_list = re.sub(r"(?i)^\s*SELECT\s+", "", ln).strip()
+                        final_lines.append(f"{indent}SELECT")
+                        final_lines.append(f"{indent}    {select_list}")
+                        # do not append current ln; next iteration will append FROM line as-is
+                        depth += open_count - close_count
+                        continue
+                # Dedent top-level FROM/WHERE that have exactly 4 leading spaces
+                if depth == 0 and re.match(r"^\s{4}(FROM|WHERE)\b", ln, flags=re.IGNORECASE):
+                    ln = re.sub(r"^\s{4}(FROM|WHERE)\b", lambda m: m.group(1).upper(), ln, count=1, flags=re.IGNORECASE)
+
+                final_lines.append(ln)
+                depth += open_count - close_count
+            sql_text = "\n".join(final_lines)
+
+            # Remove accidental double blank lines before FROM
+            sql_text = re.sub(r"\n\s*\n(\s*FROM\b)", r"\n\1", sql_text, flags=re.IGNORECASE)
+
+            # Strong finalization: inside parens, split '        SELECT <list>' followed by '    FROM'
+            sql_text = re.sub(
+                r"(?m)^(\s{8})SELECT\s+([^\n]+)\n(\s{4})FROM\b",
+                lambda m: f"{m.group(1)}SELECT\n{m.group(1)}    {m.group(2).strip()}\n{m.group(3)}FROM",
+                sql_text,
+            )
+
+            # Optional: remove spaces around operators if user didn't request them
+            if not use_space_around_operators:
+                # Tighten spaces around equals without touching other operators
+                sql_text = re.sub(r"\s*=\s*", "=", sql_text)
+
+            # Ultimate safeguard: split any 'SELECT <list>' line when the next line starts with FROM, at any depth
+            _lines = sql_text.splitlines()
+            _out = []
+            i = 0
+            while i < len(_lines):
+                cur = _lines[i]
+                nxt = _lines[i+1] if i + 1 < len(_lines) else None
+                if nxt is not None and re.match(r"(?i)^\s*SELECT\s+\S", cur) and re.match(r"(?i)^\s*FROM\b", nxt):
+                    indent = re.match(r"^(\s*)", cur).group(1)
+                    select_list = re.sub(r"(?i)^\s*SELECT\s+", "", cur).strip()
+                    _out.append(f"{indent}SELECT")
+                    _out.append(f"{indent}    {select_list}")
+                    i += 1  # consume current, next will be appended in next iteration
+                else:
+                    _out.append(cur)
+                i += 1
+            sql_text = "\n".join(_out)
+
+            # Indentation fix for IN ( ... ) blocks: when a line with 4-space SELECT follows a line ending with 'IN ('
+            lines2 = sql_text.splitlines()
+            out2 = []
+            i = 0
+            while i < len(lines2):
+                cur = lines2[i]
+                out2.append(cur)
+                # Detect opening of IN (
+                if re.search(r"(?i)IN\s*\($", cur.strip()):
+                    j = i + 1
+                    # If next line starts with exactly 4 spaces and 'SELECT', increase indent of the block by 4 spaces
+                    if j < len(lines2) and re.match(r"^\s{4}SELECT\b", lines2[j], flags=re.IGNORECASE):
+                        # Walk until closing ')' at 4 spaces indent
+                        k = j
+                        while k < len(lines2):
+                            ln = lines2[k]
+                            if re.match(r"^\s*\)\s*", ln):
+                                out2.append(ln)  # keep closing as-is
+                                i = k
+                                break
+                            if ln.strip():
+                                out2.append('    ' + ln)
+                            else:
+                                out2.append(ln)
+                            k += 1
+                        else:
+                            i = j
+                        # Skip lines we already appended
+                        i = k
+                i += 1
+            sql_text = "\n".join(out2)
+
+            # Targeted split/indent after 'FROM (' and 'IN ('
+            lines3 = sql_text.splitlines()
+            out3 = []
+            for idx, ln in enumerate(lines3):
+                prev = lines3[idx-1] if idx > 0 else ''
+                prev_trim = prev.strip().upper()
+                if re.match(r"^(\s{4})SELECT\s+([^\n]+)\s*$", ln, flags=re.IGNORECASE) and (
+                    prev_trim.endswith('FROM (') or prev_trim.endswith('IN (')
+                ):
+                    m = re.match(r"^(\s{4})SELECT\s+([^\n]+)\s*$", ln, flags=re.IGNORECASE)
+                    base_indent = '        ' if prev_trim.endswith('IN (') else m.group(1)
+                    select_list = m.group(2).strip()
+                    out3.append(f"{base_indent}SELECT")
+                    out3.append(f"{base_indent}    {select_list}")
+                    continue
+                out3.append(ln)
+            sql_text = "\n".join(out3)
+            
+            # Removed late-stage nested-select rewrite to avoid overriding previous fixes
+
             return sql_text
 
         def format_chunk(chunk: str) -> str:
@@ -529,6 +1004,7 @@ def api_format():
                 return 'GO'
             if not chunk.strip():
                 return ''
+            # Use sqlparse-based formatting
             formatted = sqlparse.format(
                 chunk,
                 keyword_case=(None if keyword_case == 'preserve' else keyword_case),

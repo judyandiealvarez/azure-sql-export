@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block title %}Copy Data - Azure SQL Database Tools{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-clone text-warning me-2"></i>Copy Data</h2>
+        <p class="text-muted">Copy table data from a source Azure SQL Database to a target Azure SQL Database.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-cog me-2"></i>Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="copyForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="configFile" class="form-label">Copy Configuration File</label>
+                        <input type="file" class="form-control" id="configFile" name="config_file" accept=".yaml,.yml,.json" required>
+                        <div class="form-text">Provide a YAML/JSON file with <code>source_db</code>, <code>target_db</code>, and <code>copy</code> sections.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="tablesFile" class="form-label">Optional Tables File</label>
+                        <input type="file" class="form-control" id="tablesFile" name="tables_file" accept=".txt">
+                        <div class="form-text">One table per line. Use <code>schema.table</code> or <code>table</code> (defaults to schema from config).</div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-warning btn-lg" id="copyBtn">
+                            <i class="fas fa-clone me-2"></i>Start Copy
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>How it works
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success me-2"></i>Reads tables from config and/or file</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Optional truncate target</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Batch insert with fast_executemany</li>
+                    <li><i class="fas fa-check text-success me-2"></i>Identity insert auto handling</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-download me-2"></i>Example Config
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted">Download example configuration file:</p>
+                <div class="d-grid">
+                    <a href="{{ url_for('static', filename='config.copy.example.yaml') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-download me-1"></i>Copy Config Example
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Modal -->
+<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-clone me-2"></i>Copy in Progress
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%" id="progressBar"></div>
+                    </div>
+                    <div class="text-center mt-2">
+                        <span id="progressText">Starting copy...</span>
+                    </div>
+                </div>
+
+                <div id="operationLog" class="bg-light p-3 rounded" style="height: 200px; overflow-y: auto;">
+                    <div class="text-muted">Waiting for operation to start...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeBtn" disabled>
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('copyForm');
+    const copyBtn = document.getElementById('copyBtn');
+    const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const operationLog = document.getElementById('operationLog');
+    const closeBtn = document.getElementById('closeBtn');
+
+    let operationId = null;
+    let statusInterval = null;
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+
+        copyBtn.disabled = true;
+        copyBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Starting...';
+
+        fetch('/api/copy', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            operationId = data.operation_id;
+            progressModal.show();
+            startStatusPolling();
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+            copyBtn.disabled = false;
+            copyBtn.innerHTML = '<i class="fas fa-clone me-2"></i>Start Copy';
+        });
+    });
+
+    function startStatusPolling() {
+        statusInterval = setInterval(() => {
+            fetch(`/api/status/${operationId}`)
+            .then(response => response.json())
+            .then(data => {
+                updateProgress(data);
+
+                if (data.status === 'completed' || data.status === 'error') {
+                    clearInterval(statusInterval);
+                    copyBtn.disabled = false;
+                    copyBtn.innerHTML = '<i class="fas fa-clone me-2"></i>Start Copy';
+                    closeBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Status polling error:', error);
+            });
+        }, 1000);
+    }
+
+    function updateProgress(data) {
+        progressBar.style.width = (data.progress || 0) + '%';
+        progressText.textContent = data.message || '';
+
+        const logEntry = document.createElement('div');
+        logEntry.className = 'mb-1';
+        logEntry.innerHTML = `<small class="text-muted">${new Date().toLocaleTimeString()}</small> ${data.message || ''}`;
+        operationLog.appendChild(logEntry);
+        operationLog.scrollTop = operationLog.scrollHeight;
+
+        while (operationLog.children.length > 50) {
+            operationLog.removeChild(operationLog.firstChild);
+        }
+    }
+
+    document.getElementById('progressModal').addEventListener('hidden.bs.modal', function() {
+        if (statusInterval) {
+            clearInterval(statusInterval);
+        }
+        form.reset();
+        progressBar.style.width = '0%';
+        progressText.textContent = 'Starting copy...';
+        operationLog.innerHTML = '<div class="text-muted">Waiting for operation to start...</div>';
+        closeBtn.disabled = true;
+    });
+});
+</script>
+{% endblock %}
+
+
