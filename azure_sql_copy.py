@@ -61,6 +61,10 @@ def load_config(config_file: str) -> Dict:
         sys.exit(1)
 
 
+def _mask_conn_str(conn_str: str) -> str:
+    return conn_str.replace("PWD=", "PWD=***").replace("Password=", "Password=***")
+
+
 def build_connection(config_section: Dict) -> pyodbc.Connection:
     server = config_section['server']
     database = config_section['database']
@@ -89,7 +93,10 @@ def build_connection(config_section: Dict) -> pyodbc.Connection:
         )
 
     try:
-        return pyodbc.connect(conn_str)
+        logger.info(f"Connecting with: {_mask_conn_str(conn_str)}")
+        conn = pyodbc.connect(conn_str)
+        logger.info("Connected successfully")
+        return conn
     except Exception as e:
         # Provide detailed diagnostics to help identify IM0002 quickly
         try:
@@ -141,46 +148,55 @@ def normalize_table_name(name: str, default_schema: str) -> Tuple[str, str]:
     return default_schema, name.strip('[]')
 
 
-def get_columns(cursor: pyodbc.Cursor, schema_name: str, table_name: str) -> List[str]:
-    cursor.execute(
+def get_columns(cursor: pyodbc.Cursor, schema_name: str, table_name: str, log_sql: bool = False) -> List[str]:
+    sql = (
         """
         SELECT COLUMN_NAME
         FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
         ORDER BY ORDINAL_POSITION
-        """,
-        schema_name, table_name
+        """
     )
+    if log_sql:
+        logger.info(f"SQL: {sql.strip()} | params={[schema_name, table_name]}")
+    cursor.execute(sql, schema_name, table_name)
     return [row[0] for row in cursor.fetchall()]
 
 
-def has_identity_column(cursor: pyodbc.Cursor, schema_name: str, table_name: str) -> bool:
-    cursor.execute(
+def has_identity_column(cursor: pyodbc.Cursor, schema_name: str, table_name: str, log_sql: bool = False) -> bool:
+    sql = (
         """
         SELECT 1
         FROM sys.columns c
         JOIN sys.tables t ON c.object_id = t.object_id
         JOIN sys.schemas s ON t.schema_id = s.schema_id
         WHERE s.name = ? AND t.name = ? AND c.is_identity = 1
-        """,
-        schema_name, table_name
+        """
     )
+    if log_sql:
+        logger.info(f"SQL: {sql.strip()} | params={[schema_name, table_name]}")
+    cursor.execute(sql, schema_name, table_name)
     return cursor.fetchone() is not None
 
 
-def fetch_batch(cursor: pyodbc.Cursor, schema_name: str, table_name: str, offset: int, batch_size: int) -> List[tuple]:
+def fetch_batch(cursor: pyodbc.Cursor, schema_name: str, table_name: str, offset: int, batch_size: int, log_sql: bool = False) -> List[tuple]:
     sql = f"""
         SELECT *
         FROM [{schema_name}].[{table_name}]
         ORDER BY (SELECT NULL)
         OFFSET {offset} ROWS FETCH NEXT {batch_size} ROWS ONLY
     """
+    if log_sql:
+        logger.info(f"SQL: {sql.strip()}")
     cursor.execute(sql)
     return cursor.fetchall()
 
 
-def get_row_count(cursor: pyodbc.Cursor, schema_name: str, table_name: str) -> int:
-    cursor.execute(f"SELECT COUNT(*) FROM [{schema_name}].[{table_name}]")
+def get_row_count(cursor: pyodbc.Cursor, schema_name: str, table_name: str, log_sql: bool = False) -> int:
+    sql = f"SELECT COUNT(*) FROM [{schema_name}].[{table_name}]"
+    if log_sql:
+        logger.info(f"SQL: {sql}")
+    cursor.execute(sql)
     return int(cursor.fetchone()[0])
 
 
@@ -224,7 +240,8 @@ def copy_table(source_conn: pyodbc.Connection,
                identity_mode: str,
                dry_run: bool,
                retries: int,
-               retry_sleep: float) -> Tuple[bool, str, int]:
+               retry_sleep: float,
+               log_sql: bool = False) -> Tuple[bool, str, int]:
     src_cur = source_conn.cursor()
     tgt_cur = target_conn.cursor()
     tgt_cur.fast_executemany = True
@@ -232,57 +249,79 @@ def copy_table(source_conn: pyodbc.Connection,
     full_name = f"{schema_name}.{table_name}"
 
     try:
-        columns = get_columns(src_cur, schema_name, table_name)
+        columns = get_columns(src_cur, schema_name, table_name, log_sql=log_sql)
         if not columns:
             return False, f"No columns found for {full_name}", 0
 
-        total_rows = get_row_count(src_cur, schema_name, table_name)
+        total_rows = get_row_count(src_cur, schema_name, table_name, log_sql=log_sql)
         logger.info(f"{full_name}: {total_rows} rows to copy")
 
         if dry_run:
             return True, "Dry-run", total_rows
 
-        # Begin per-table transaction
-        execute_with_retry(lambda: tgt_cur.execute("BEGIN TRANSACTION"), retries, retry_sleep)
+        # Use explicit connection-managed transaction
+        target_conn.autocommit = False
 
         # Optional truncate
         if truncate and total_rows > 0:
-            logger.info(f"{full_name}: TRUNCATE target")
-            execute_with_retry(lambda: tgt_cur.execute(f"TRUNCATE TABLE [{schema_name}].[{table_name}]"), retries, retry_sleep)
+            sql = f"TRUNCATE TABLE [{schema_name}].[{table_name}]"
+            logger.info(f"{full_name}: {sql}")
+            execute_with_retry(lambda: tgt_cur.execute(sql), retries, retry_sleep)
 
         # Identity handling
-        identity_exists = has_identity_column(src_cur, schema_name, table_name)
+        identity_exists = has_identity_column(src_cur, schema_name, table_name, log_sql=log_sql)
         identity_on = False
         if identity_mode == 'on' or (identity_mode == 'auto' and identity_exists):
-            logger.info(f"{full_name}: SET IDENTITY_INSERT ON")
+            sql = f"SET IDENTITY_INSERT [{schema_name}].[{table_name}] ON"
+            logger.info(f"{full_name}: {sql}")
             identity_on = True
-            execute_with_retry(lambda: tgt_cur.execute(f"SET IDENTITY_INSERT [{schema_name}].[{table_name}] ON"), retries, retry_sleep)
+            execute_with_retry(lambda: tgt_cur.execute(sql), retries, retry_sleep)
 
         placeholders = ",".join(["?" for _ in columns])
         insert_sql = f"INSERT INTO [{schema_name}].[{table_name}] ([{'] ,['.join(columns)}]) VALUES ({placeholders})"
+        if log_sql:
+            logger.info(f"INSERT template: {insert_sql}")
 
         copied = 0
         for offset in range(0, total_rows, batch_size):
-            rows = fetch_batch(src_cur, schema_name, table_name, offset, batch_size)
+            rows = fetch_batch(src_cur, schema_name, table_name, offset, batch_size, log_sql=log_sql)
             if not rows:
                 break
             try:
+                if log_sql:
+                    sample = rows[0] if rows else None
+                    logger.info(f"executemany: count={len(rows)} sample_params={sample}")
                 tgt_cur.executemany(insert_sql, rows)
             except Exception:
                 # Fallback row-by-row to identify problem row
-                for row in rows:
+                for idx, row in enumerate(rows, start=1):
+                    if log_sql:
+                        logger.info(f"execute row {idx}: params={row}")
                     tgt_cur.execute(insert_sql, row)
             copied += len(rows)
+            if log_sql:
+                logger.info(f"batch committed to cursor, current copied={copied}")
 
         if identity_on:
-            logger.info(f"{full_name}: SET IDENTITY_INSERT OFF")
-            execute_with_retry(lambda: tgt_cur.execute(f"SET IDENTITY_INSERT [{schema_name}].[{table_name}] OFF"), retries, retry_sleep)
+            sql = f"SET IDENTITY_INSERT [{schema_name}].[{table_name}] OFF"
+            logger.info(f"{full_name}: {sql}")
+            execute_with_retry(lambda: tgt_cur.execute(sql), retries, retry_sleep)
+        # Commit changes via connection
+        logger.info(f"{full_name}: COMMIT")
+        target_conn.commit()
 
-        tgt_cur.execute("COMMIT TRANSACTION")
+        # Verify row count on target after commit
+        try:
+            tgt_count = get_row_count(tgt_cur, schema_name, table_name, log_sql=log_sql)
+            logger.info(f"{full_name}: target row count after copy = {tgt_count}")
+        except Exception:
+            pass
+
         return True, "OK", copied
     except Exception as e:
         try:
-            tgt_cur.execute("ROLLBACK TRANSACTION")
+            logger.info(f"{full_name}: ROLLBACK due to error: {e}")
+            target_conn.rollback()
         except Exception:
             pass
         return False, str(e), 0
@@ -301,6 +340,7 @@ def main():
     parser.add_argument('--batch-size', type=int, help='Batch size for copy')
     parser.add_argument('--identity-insert', choices=['auto', 'on', 'off'], default=None, help='Identity insert mode')
     parser.add_argument('--dry-run', action='store_true', help='Show actions without executing')
+    parser.add_argument('--log-sql', action='store_true', help='Log SQL statements and parameters')
     parser.add_argument('--retries', type=int, default=None, help='Retries for transient errors')
     parser.add_argument('--retry-sleep', type=float, default=None, help='Seconds to sleep between retries')
 
@@ -367,7 +407,8 @@ def main():
                 identity_mode,
                 args.dry_run,
                 retries,
-                retry_sleep
+                retry_sleep,
+                log_sql=args.log_sql
             )
             if ok:
                 logger.info(f"Copied {schema_name}.{table_name}: {copied} rows")

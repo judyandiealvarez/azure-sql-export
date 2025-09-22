@@ -11,6 +11,8 @@ import stat
 from pathlib import Path
 import datetime
 import subprocess
+from dulwich import porcelain
+from dulwich.repo import Repo
 
 
 class FileManager:
@@ -880,25 +882,8 @@ class FileManager:
         """Show about dialog"""
         messagebox.showinfo("About", "Simple File Manager\nA dual-pane file manager\nVersion 1.0")
         
-    def run_git_command(self, command, cwd=None):
-        """Run a git command and return the result"""
-        try:
-            if cwd is None:
-                cwd = os.getcwd()
-            
-            result = subprocess.run(
-                command, 
-                shell=True, 
-                cwd=cwd, 
-                capture_output=True, 
-                text=True, 
-                timeout=30
-            )
-            return result.returncode == 0, result.stdout, result.stderr
-        except subprocess.TimeoutExpired:
-            return False, "", "Command timed out"
-        except Exception as e:
-            return False, "", str(e)
+    def _repo(self, path: str) -> Repo:
+        return Repo(path)
     
     def git_clone(self):
         """Clone a git repository"""
@@ -906,15 +891,13 @@ class FileManager:
         if url:
             # Use current active panel directory
             current_dir = self.get_current_dir(self.active_panel)
-            success, stdout, stderr = self.run_git_command(f"git clone {url}", cwd=current_dir)
-            if success:
-                messagebox.showinfo("Success", f"Repository cloned successfully!\n{stdout}")
-                # Refresh both panels to show the new repository
+            try:
+                porcelain.clone(source=url, target=current_dir)
+                messagebox.showinfo("Success", f"Repository cloned successfully!")
                 self.refresh_panels()
-                # Switch to the cloned repository directory
                 self.navigate_to_cloned_repo(current_dir, url)
-            else:
-                messagebox.showerror("Error", f"Clone failed:\n{stderr}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Clone failed:\n{e}")
     
     def navigate_to_cloned_repo(self, parent_dir, repo_url):
         """Navigate to the cloned repository directory"""
@@ -961,12 +944,12 @@ class FileManager:
     def git_pull(self):
         """Pull changes from remote repository"""
         current_dir = self.get_current_dir(self.active_panel)
-        success, stdout, stderr = self.run_git_command("git pull", cwd=current_dir)
-        if success:
-            messagebox.showinfo("Success", f"Pull successful!\n{stdout}")
+        try:
+            porcelain.pull(current_dir, remote_location='origin')
+            messagebox.showinfo("Success", "Pull successful!")
             self.refresh_panels()
-        else:
-            messagebox.showerror("Error", f"Pull failed:\n{stderr}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Pull failed:\n{e}")
     
     def git_commit_all(self):
         """Add all files and commit"""
@@ -976,35 +959,28 @@ class FileManager:
         message = simpledialog.askstring("Git Commit", "Enter commit message:")
         if not message:
             return
-            
-        # Add all files
-        success, stdout, stderr = self.run_git_command("git add .", cwd=current_dir)
-        if not success:
-            messagebox.showerror("Error", f"Add failed:\n{stderr}")
-            return
-            
-        # Commit
-        success, stdout, stderr = self.run_git_command(f'git commit -m "{message}"', cwd=current_dir)
-        if success:
-            messagebox.showinfo("Success", f"Commit successful!\n{stdout}")
+        try:
+            porcelain.add(current_dir, paths=['.'])
+            porcelain.commit(current_dir, message=message.encode('utf-8'))
+            messagebox.showinfo("Success", "Commit successful!")
             self.refresh_panels()
-        else:
-            messagebox.showerror("Error", f"Commit failed:\n{stderr}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Commit failed:\n{e}")
     
     def git_push(self):
         """Push changes to remote repository"""
         current_dir = self.get_current_dir(self.active_panel)
-        success, stdout, stderr = self.run_git_command("git push", cwd=current_dir)
-        if success:
-            messagebox.showinfo("Success", f"Push successful!\n{stdout}")
-        else:
-            messagebox.showerror("Error", f"Push failed:\n{stderr}")
+        try:
+            porcelain.push(current_dir, remote_location='origin')
+            messagebox.showinfo("Success", "Push successful!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Push failed:\n{e}")
     
     def git_status(self):
         """Show git status"""
         current_dir = self.get_current_dir(self.active_panel)
-        success, stdout, stderr = self.run_git_command("git status", cwd=current_dir)
-        if success:
+        try:
+            st = porcelain.status(current_dir)
             # Create a new window to show status
             status_window = tk.Toplevel(self.root)
             status_window.title("Git Status")
@@ -1012,15 +988,18 @@ class FileManager:
             
             text_widget = tk.Text(status_window, wrap=tk.WORD)
             text_widget.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-            text_widget.insert(tk.END, stdout)
+            text = []
+            text.append("Changes to be committed:\n" + "\n".join(f"  {p.decode()}" for p in st.staged))
+            text.append("\nChanges not staged for commit:\n" + "\n".join(f"  {p.decode()}" for p in st.unstaged))
+            text.append("\nUntracked files:\n" + "\n".join(f"  {p.decode()}" for p in st.untracked))
+            text_widget.insert(tk.END, "\n".join(text))
             text_widget.config(state=tk.DISABLED)
             
-            # Add scrollbar
             scrollbar = ttk.Scrollbar(status_window, orient=tk.VERTICAL, command=text_widget.yview)
             scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
             text_widget.configure(yscrollcommand=scrollbar.set)
-        else:
-            messagebox.showerror("Error", f"Status failed:\n{stderr}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Status failed:\n{e}")
 
 
 def main():
