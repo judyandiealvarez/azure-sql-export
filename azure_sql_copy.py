@@ -67,22 +67,38 @@ def build_connection(config_section: Dict) -> pyodbc.Connection:
     driver = config_section.get('driver', 'ODBC Driver 17 for SQL Server')
     auth_type = config_section.get('authentication_type', 'sql')
 
+    # Build connection string without .format to avoid brace mishaps
     if auth_type == 'azure_ad':
         conn_str = (
-            f"DRIVER={{{{driver}}}};SERVER={server};DATABASE={database};"
-            f"Authentication=ActiveDirectoryDefault;TrustServerCertificate=yes;"
+            "DRIVER={" + driver + "};" +
+            "SERVER=" + server + ";" +
+            "DATABASE=" + database + ";" +
+            "Authentication=ActiveDirectoryDefault;" +
+            "TrustServerCertificate=yes;"
         )
-        conn_str = conn_str.format(driver=driver)
     else:
         username = config_section['username']
         password = config_section['password']
         conn_str = (
-            f"DRIVER={{{{driver}}}};SERVER={server};DATABASE={database};"
-            f"UID={username};PWD={password};TrustServerCertificate=yes;"
+            "DRIVER={" + driver + "};" +
+            "SERVER=" + server + ";" +
+            "DATABASE=" + database + ";" +
+            "UID=" + username + ";" +
+            "PWD=" + password + ";" +
+            "TrustServerCertificate=yes;"
         )
-        conn_str = conn_str.format(driver=driver)
 
-    return pyodbc.connect(conn_str)
+    try:
+        return pyodbc.connect(conn_str)
+    except Exception as e:
+        # Provide detailed diagnostics to help identify IM0002 quickly
+        try:
+            drivers = pyodbc.drivers()
+        except Exception:
+            drivers = []
+        raise RuntimeError(
+            f"ODBC connect failed: {e}. Using driver='{driver}'. Available drivers={drivers}"
+        )
 
 
 def parse_tables(cli_tables: Optional[str], tables_file: Optional[str], config_tables: Optional[List[str]], default_schema: str) -> List[Tuple[str, str]]:
