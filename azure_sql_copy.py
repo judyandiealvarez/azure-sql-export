@@ -69,16 +69,18 @@ def build_connection(config_section: Dict) -> pyodbc.Connection:
 
     if auth_type == 'azure_ad':
         conn_str = (
-            f"DRIVER={{{{}}}};SERVER={server};DATABASE={database};"
+            f"DRIVER={{{{driver}}}};SERVER={server};DATABASE={database};"
             f"Authentication=ActiveDirectoryDefault;TrustServerCertificate=yes;"
-        ).format(driver)
+        )
+        conn_str = conn_str.format(driver=driver)
     else:
         username = config_section['username']
         password = config_section['password']
         conn_str = (
-            f"DRIVER={{{{}}}};SERVER={server};DATABASE={database};"
+            f"DRIVER={{{{driver}}}};SERVER={server};DATABASE={database};"
             f"UID={username};PWD={password};TrustServerCertificate=yes;"
-        ).format(driver)
+        )
+        conn_str = conn_str.format(driver=driver)
 
     return pyodbc.connect(conn_str)
 

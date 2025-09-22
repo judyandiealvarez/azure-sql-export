@@ -6,3 +6,4 @@ Flask>=2.0.0
 Werkzeug>=2.0.0
 sqlparse>=0.4.4
 sqlglot>=25.9.0
+GitPython>=3.1.43
