@@ -2,9 +2,18 @@
 REM Windows launcher for azs unified CLI
 REM Prefer installed entry point if available; otherwise use module
 
-where azs >nul 2>nul
-if %ERRORLEVEL%==0 (
-  azs %*
+REM Prefer installed azs on PATH, but avoid infinite recursion with this script
+set AZS_FOUND=
+for /f "usebackq delims=" %%I in (`where azs 2^>nul`) do (
+  if /i not "%%~fI"=="%~f0" set AZS_FOUND=%%~fI
+)
+if not defined AZS_FOUND (
+  for /f "usebackq delims=" %%I in (`where azs.exe 2^>nul`) do (
+    set AZS_FOUND=%%~fI
+  )
+)
+if defined AZS_FOUND (
+  "%AZS_FOUND%" %*
   exit /b %ERRORLEVEL%
 )
 
