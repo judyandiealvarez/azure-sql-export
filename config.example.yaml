@@ -1,31 +1,74 @@
-# Azure SQL Database Export Configuration
-# Copy this file to config.yaml and update with your settings
+# Unified configuration for all azs commands.
+# Copy to config.yaml and edit the values. Keys are shared across tools.
 
-# Database connection settings
-server: "your-server.database.windows.net"
-database: "your-database-name"
+# --- Connection ---
+server: "your-server.database.windows.net"          # Required: server hostname
+database: "your-database-name"                      # Required: database name
+authentication_type: "sql"                          # "sql" or "azure_ad"
+driver: "ODBC Driver 17 for SQL Server"             # ODBC driver name
 
-# Authentication type: "sql" or "azure_ad"
-authentication_type: "sql"
-
-# SQL Server authentication (only needed if authentication_type is "sql")
+# Only for authentication_type: "sql"
 username: "your-username"
 password: "your-password"
 
-# ODBC driver name
-driver: "ODBC Driver 17 for SQL Server"
+# --- Export (azs export) ---
+output_directory: "export_output"                   # Where exports are written
+export_data: true                                    # Include table data
+batch_size: 1000                                     # Rows per batch for data export
+data_format: "sql"                                  # "sql" or "binary"
+reporting_interval: 1000                             # Progress log frequency (rows)
 
-# Output settings
-output_directory: "export_output"
-export_data: true
-batch_size: 1000
-data_format: "sql"  # "sql" or "binary"
-reporting_interval: 1000  # Report progress every N batches (default: 1000)
-
-# Schema filtering
-# Leave include_schemas empty to include all schemas
-# Leave exclude_schemas empty to exclude none
-include_schemas: []
+# Filter which schemas to include/exclude during export/compare/import
+include_schemas: []                                  # e.g., ["dbo", "sales"]
 exclude_schemas:
   - "sys"
   - "INFORMATION_SCHEMA"
+
+# --- Import (azs import) ---
+import_directory: "export_output"                   # Directory produced by export
+confirm_each_object: false                           # If true, ask before applying
+truncate_before_load: false                          # If true, truncate tables first
+
+# --- Compare (azs compare) ---
+show_data_samples: true                              # Include sample row diffs
+sample_size: 5                                       # Samples per table
+export_report: true                                  # Save compare report to files
+
+# --- Copy (azs copy) ---
+# Source and target profiles for data copy. Supported auth like top-level keys.
+source:
+  server: "source-server.database.windows.net"
+  database: "source-db"
+  authentication_type: "sql"
+  username: "src-user"
+  password: "src-pass"
+  driver: "ODBC Driver 17 for SQL Server"
+
+target:
+  server: "target-server.database.windows.net"
+  database: "target-db"
+  authentication_type: "sql"
+  username: "tgt-user"
+  password: "tgt-pass"
+  driver: "ODBC Driver 17 for SQL Server"
+
+tables: []                                           # Optional; empty means all eligible
+identity_insert: "auto"                              # auto|on|off
+dry_run: false                                       # If true, show plan only
+
+# --- Web (azs web) ---
+web:
+  upload_folder: "uploads"
+  export_folder: "exports"
+  max_content_length_mb: 16
+
+# --- Schema Sync (azs sync) ---
+sync:
+  schema_name: "dbo"                                 # Schema to sync from DB
+  sql_schema_dir: "sql/schema"                       # Local folder for .sql files
+
+# --- Migration (azs migrate) ---
+migrate:
+  schema_name: "dbo"                                 # Schema to compare
+  sql_schema_dir: "sql/schema"                       # Local schema files root
+  migrations_dir: "sql/migrations"                   # Output folder for migration scripts

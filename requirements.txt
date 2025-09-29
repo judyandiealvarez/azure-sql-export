@@ -6,4 +6,3 @@ Flask>=2.0.0
 Werkzeug>=2.0.0
 sqlparse>=0.4.4
 sqlglot>=25.9.0
-dulwich>=0.21.6  # used only by file_manager.py (no git CLI)

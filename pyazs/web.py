@@ -19,11 +19,11 @@ import zipfile
 import tempfile
 import shutil
 
-# Import our existing modules
-from azure_sql_export import AzureSQLExporter
-from azure_sql_import import AzureSQLImporter
-from azure_sql_compare import DatabaseComparator
-import azure_sql_copy as copy_mod
+# Import our internal modules (renamed)
+from .export import AzureSQLExporter
+from .imp import AzureSQLImporter
+from .compare import DatabaseComparator
+from . import copy as copy_mod
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

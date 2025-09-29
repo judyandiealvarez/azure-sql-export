@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyazs"
+version = "0.1.0"
+description = "Unified Azure SQL tools CLI (export/import/compare/copy/web)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [ { name = "Azuresqlfetch Maintainers" } ]
+dependencies = [
+  "pyodbc>=4.0.39",
+  "pandas>=1.5.0",
+  "PyYAML>=6.0",
+  "Flask>=2.0.0",
+  "Werkzeug>=2.0.0",
+  "sqlparse>=0.4.4",
+  "sqlglot>=25.9.0",
+]
+
+[project.scripts]
+azs = "pyazs.cli:main"
+
+[tool.setuptools]
+packages = ["pyazs"]
+
+

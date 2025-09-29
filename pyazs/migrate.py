@@ -1,0 +1,168 @@
+# Config-driven migration generator consistent with other commands
+import os
+import sys
+import json
+import yaml
+import argparse
+import pyodbc
+from datetime import datetime
+from typing import Dict
+
+OBJECT_QUERIES = {
+    'Tables': """
+        SELECT t.name, OBJECT_DEFINITION(t.object_id) AS definition
+        FROM sys.tables t
+        JOIN sys.schemas s ON t.schema_id = s.schema_id
+        WHERE s.name = ?
+    """,
+    'Views': """
+        SELECT v.name, OBJECT_DEFINITION(v.object_id) AS definition
+        FROM sys.views v
+        JOIN sys.schemas s ON v.schema_id = s.schema_id
+        WHERE s.name = ?
+    """,
+    'StoredProcedures': """
+        SELECT p.name, OBJECT_DEFINITION(p.object_id) AS definition
+        FROM sys.procedures p
+        JOIN sys.schemas s ON p.schema_id = s.schema_id
+        WHERE s.name = ?
+    """,
+    'Functions': """
+        SELECT f.name, OBJECT_DEFINITION(f.object_id) AS definition
+        FROM sys.objects f
+        JOIN sys.schemas s ON f.schema_id = s.schema_id
+        WHERE s.name = ? AND f.type IN ('FN','TF','IF')
+    """,
+    'Triggers': """
+        SELECT tr.name, OBJECT_DEFINITION(tr.object_id) AS definition
+        FROM sys.triggers tr
+        JOIN sys.objects o ON tr.parent_id = o.object_id
+        JOIN sys.schemas s ON o.schema_id = s.schema_id
+        WHERE s.name = ?
+    """
+}
+
+
+def _load_config(config_path: str) -> Dict:
+    with open(config_path, 'r', encoding='utf-8') as f:
+        if config_path.endswith(('.yaml', '.yml')):
+            return yaml.safe_load(f)
+        return json.load(f)
+
+
+def _build_conn_str(config: Dict) -> str:
+    driver = config.get('driver', 'ODBC Driver 17 for SQL Server')
+    server = config['server']
+    database = config['database']
+    auth_type = config.get('authentication_type', 'sql')
+
+    if auth_type == 'azure_ad':
+        return (
+            "DRIVER={" + driver + "};" +
+            "SERVER=" + server + ";" +
+            "DATABASE=" + database + ";" +
+            "Authentication=ActiveDirectoryDefault;"
+        )
+
+    username = config.get('username') or config.get('user') or config.get('uid')
+    password = config.get('password') or config.get('pwd')
+    if not username or not password:
+        raise SystemExit('Missing username/password for SQL authentication in config')
+
+    return (
+        "DRIVER={" + driver + "};" +
+        "SERVER=" + server + ";" +
+        "PORT=1433;" +
+        "DATABASE=" + database + ";" +
+        "UID=" + str(username) + ";" +
+        "PWD=" + str(password)
+    )
+
+
+def get_db_objects(cursor, obj_type: str, schema_name: str):
+    cursor.execute(OBJECT_QUERIES[obj_type], schema_name)
+    return {row.name: row.definition for row in cursor.fetchall() if row.definition}
+
+
+def get_file_objects(folder: str):
+    if not os.path.exists(folder):
+        return {}
+    result = {}
+    for f in os.listdir(folder):
+        if f.endswith('.sql'):
+            with open(os.path.join(folder, f), encoding='utf-8') as file:
+                result[os.path.splitext(f)[0]] = file.read()
+    return result
+
+
+def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str):
+    conn_str = _build_conn_str(config)
+    migration_sql = []
+
+    with pyodbc.connect(conn_str) as conn:
+        cursor = conn.cursor()
+        for obj_type in OBJECT_QUERIES:
+            db_objs = get_db_objects(cursor, obj_type, schema_name)
+            folder_name = obj_type if obj_type != 'StoredProcedures' else 'Stored Procedures'
+            folder = os.path.join(sql_schema_dir, folder_name)
+            file_objs = get_file_objects(folder)
+
+            # Find objects to create or alter
+            for name, db_def in db_objs.items():
+                file_def = file_objs.get(name)
+                if file_def is None:
+                    migration_sql.append(f"-- Create {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
+                else:
+                    def norm(s):
+                        return '\n'.join(line.rstrip() for line in s.replace('\r\n', '\n').replace('\r', '\n').split('\n')).strip()
+                    if norm(file_def) != norm(db_def):
+                        migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
+
+            # Find objects to drop (in files but not in DB)
+            for name, _ in file_objs.items():
+                if name not in db_objs:
+                    if obj_type == 'Tables':
+                        migration_sql.append(f"DROP TABLE [{schema_name}].[{name}];\n")
+                    elif obj_type == 'Views':
+                        migration_sql.append(f"DROP VIEW [{schema_name}].[{name}];\n")
+                    elif obj_type == 'StoredProcedures':
+                        migration_sql.append(f"DROP PROCEDURE [{schema_name}].[{name}];\n")
+                    elif obj_type == 'Functions':
+                        migration_sql.append(f"DROP FUNCTION [{schema_name}].[{name}];\n")
+                    elif obj_type == 'Triggers':
+                        migration_sql.append(f"DROP TRIGGER [{schema_name}].[{name}];\n")
+
+    if migration_sql:
+        os.makedirs(migrations_dir, exist_ok=True)
+        existing = [f for f in os.listdir(migrations_dir) if f.startswith('update') and f.endswith('.sql')]
+        nums = [int(f[6:10]) for f in existing if f[6:10].isdigit()]
+        next_num = max(nums, default=0) + 1
+        filename = f"update{next_num:04d}.sql"
+        outfile = os.path.join(migrations_dir, filename)
+        with open(outfile, 'w', encoding='utf-8') as f:
+            f.write('-- Auto-generated migration\n')
+            f.write(f'-- Generated at {datetime.utcnow().isoformat()}Z\n\n')
+            f.write('\n'.join(migration_sql))
+        print(f"Migration written to {outfile}")
+    else:
+        print("No changes detected. Migration not created.")
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description='Generate SQL migrations by comparing DB to local files')
+    parser.add_argument('-c', '--config', required=True, help='Path to YAML/JSON config')
+    parser.add_argument('--schema-name', required=True, help='Schema name (e.g., BPG_FinOps_Invoice_Reimbursement)')
+    parser.add_argument('--sql-schema-dir', default=os.path.join('sql', 'schema'), help='Local schema root directory')
+    parser.add_argument('--migrations-dir', default=os.path.join('sql', 'migrations'), help='Output migrations directory')
+    args = parser.parse_args(argv)
+
+    config = _load_config(args.config)
+    generate_migration(config=config,
+                       sql_schema_dir=args.sql_schema_dir,
+                       migrations_dir=args.migrations_dir,
+                       schema_name=args.schema_name)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

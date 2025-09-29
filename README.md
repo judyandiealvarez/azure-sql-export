@@ -1,691 +1,279 @@
-# Azure SQL Database Export, Import & Comparison Tools
+# azs (pyazs) – Azure SQL unified CLI
 
-Python scripts to export, import, and compare Azure SQL Database schema objects and table data for migration between servers.
+Unified command-line for exporting, importing, comparing, copying data, web UI, schema sync, and migration script generation for Azure SQL.
 
-## Features
+## Install
 
-### Export Tool (`azure_sql_export.py`)
-- **Schema Export**: Exports tables, views, stored procedures, functions, and triggers
-- **Data Export**: Exports table data as SQL INSERT statements or binary format
-- **Binary Data Export**: High-performance compressed binary export for large datasets
-- **Organized Output**: Creates structured directories for easy migration
-- **Authentication Support**: Supports both SQL Server and Azure AD authentication
-- **Batch Processing**: Handles large datasets efficiently
-- **Migration Script**: Generates a master migration script with proper order
-
-### Import Tool (`azure_sql_import.py`)
-- **Interactive Import**: Compare and confirm imports with detailed differences
-- **Schema Comparison**: Shows differences between existing and new objects
-- **Auto-Skip Identical**: Automatically skips objects with no differences
-- **Smart ALTER Logic**: Uses ALTER statements for existing objects (no DROP/CREATE)
-- **Data Import Options**: Truncate and import or append to existing tables
-- **Binary Data Import**: High-performance binary data import with compression
-- **Safe Import**: Rollback capabilities and detailed logging
-- **Object Management**: ALTER existing objects or skip them
-- **Progress Tracking**: Real-time progress updates and batch processing
-- **Dependency Analysis**: Automatically analyzes and resolves object dependencies
-- **Smart Import Order**: Uses topological sorting to import objects in correct order
-
-### Comparison Tool (`azure_sql_compare.py`)
-- **Schema Comparison**: Compare exported schema with target database
-- **Data Comparison**: Compare row counts and sample data (SQL or binary)
-- **Binary Data Analysis**: Analyze compressed binary data files
-- **Smart Comparison**: Ignores cosmetic differences (comments, timestamps, formatting)
-- **Detailed Differences**: Show exact differences between objects
-- **Change Summary**: Categorize changes (new, modified, deleted, unchanged)
-- **Export Reports**: Generate detailed comparison reports
-- **Safe Analysis**: Read-only comparison without making changes
-
-### Web Interface (`azure_sql_web.py`)
-- **Modern Web UI**: Clean, responsive interface built with Bootstrap
-- **File Upload**: Drag-and-drop file upload for configurations and exports
-- **Real-time Progress**: Live progress tracking with detailed operation logs
-- **Background Processing**: Long-running operations run in background threads
-- **Download Results**: Download export results as ZIP files
-- **Interactive Results**: View comparison results in detailed tables
-- **Configuration Examples**: Download example configuration files
-- **Cross-platform**: Works on any system with a web browser
-
-## Prerequisites
-
-- Python 3.7+
-- ODBC Driver 17 for SQL Server (or compatible version)
-- Access to Azure SQL Database
-
-## Installation
-
-1. Clone or download this repository
-2. Install required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## Usage
-
-### Command Line Interface
-
-1. **Configure your database connection:**
-   ```bash
-   cp config.example.yaml config.yaml
-   # Edit config.yaml with your database details
-   ```
-
-2. **Export your database:**
-   ```bash
-   python azure_sql_export.py
-   ```
-
-3. **Import to another database:**
-   ```bash
-   python azure_sql_import.py
-   ```
-
-4. **Compare databases:**
-   ```bash
-   python azure_sql_compare.py
-   ```
-
-### Web Interface
-
-1. **Start the web server:**
-   ```bash
-   python start_web.py
-   ```
-
-2. **Open your browser:**
-   ```
-   http://localhost:5000
-   ```
-
-3. **Use the web interface:**
-   - **Export**: Upload configuration file and start export
-   - **Import**: Upload configuration and exported files
-   - **Compare**: Upload configuration and files to compare
-   - **Monitor**: Watch real-time progress and logs
-   - **Download**: Get results as ZIP files
-
-## Configuration
-
-### For Export (Source Database)
-
-1. Copy and edit the export configuration file:
-   ```bash
-   cp config.example.yaml config.yaml
-   ```
-
-2. Update `config.yaml` with your **source** Azure SQL Database details:
-
-   **For SQL Server Authentication:**
-   ```yaml
-   # Database connection settings
-   server: "your-server.database.windows.net"
-   database: "your-database-name"
-   
-   # Authentication type: "sql" or "azure_ad"
-   authentication_type: "sql"
-   
-   # SQL Server authentication
-   username: "your-username"
-   password: "your-password"
-   
-   # ODBC driver name
-   driver: "ODBC Driver 17 for SQL Server"
-   
-   # Output settings
-   output_directory: "export_output"
-   export_data: true
-   batch_size: 1000
-   data_format: "sql"  # "sql" or "binary"
-   
-   # Schema filtering
-   include_schemas: []
-   exclude_schemas:
-     - "sys"
-     - "INFORMATION_SCHEMA"
-   ```
-
-   **For Azure AD Authentication:**
-   ```yaml
-   # Database connection settings
-   server: "your-server.database.windows.net"
-   database: "your-database-name"
-   
-   # Authentication type: "sql" or "azure_ad"
-   authentication_type: "azure_ad"
-   
-   # ODBC driver name
-   driver: "ODBC Driver 17 for SQL Server"
-   
-   # Output settings
-   output_directory: "export_output"
-   export_data: true
-   batch_size: 1000
-   data_format: "sql"  # "sql" or "binary"
-   
-   # Schema filtering
-   include_schemas: []
-   exclude_schemas:
-     - "sys"
-     - "INFORMATION_SCHEMA"
-   ```
-
-### For Import (Target Database)
-
-1. Copy and edit the import configuration file:
-   ```bash
-   cp config.import.example.yaml config.yaml
-   ```
-
-2. Update `config.yaml` with your **target** Azure SQL Database details:
-
-### For Comparison (Target Database)
-
-1. Copy and edit the comparison configuration file:
-   ```bash
-   cp config.compare.example.yaml config.yaml
-   ```
-
-2. Update `config.yaml` with your **target** Azure SQL Database details:
-   ```yaml
-   # Target database connection settings
-   server: "target-server.database.windows.net"
-   database: "target-database-name"
-   
-   # Authentication type: "sql" or "azure_ad"
-   authentication_type: "sql"
-   
-   # SQL Server authentication
-   username: "target-username"
-   password: "target-password"
-   
-   # Import settings
-   import_directory: "export_output"  # Directory containing exported files
-   import_data: true                  # Whether to import table data
-   batch_size: 1000                  # Batch size for data import
-   
-   # Interactive options
-   auto_confirm: false               # Skip interactive confirmations
-   truncate_tables: false           # Truncate tables before importing data
-   alter_existing: true             # Allow altering existing objects
-   ```
-
-   ```yaml
-   # Target database connection settings
-   server: "target-server.database.windows.net"
-   database: "target-database-name"
-   
-   # Authentication type: "sql" or "azure_ad"
-   authentication_type: "sql"
-   
-   # SQL Server authentication
-   username: "target-username"
-   password: "target-password"
-   
-   # Comparison settings
-   import_directory: "export_output"  # Directory containing exported files
-   show_data_samples: true           # Show sample data in comparison
-   sample_size: 5                   # Number of sample rows to show
-   export_report: true              # Export detailed report to file
-   ```
-
-## Usage
-
-### Export (Source Database)
-
-#### Basic Export
+- Local dev (recommended):
 ```bash
-python azure_sql_export.py --config config.yaml
+pip install -r requirements.txt
+pip install -e .
 ```
+This installs the `azs` command on PATH.
 
-#### Custom Output Directory
+- Run without install (repo root):
 ```bash
-python azure_sql_export.py --config config.yaml --output /path/to/output
+./azs <command> [args]
 ```
 
-### Import (Target Database)
+## Quick start
 
-#### Interactive Import
 ```bash
-python azure_sql_import.py --config config.yaml
+cp config.example.yaml config.yaml
+# edit config.yaml (server, database, auth, etc.)
+
+# export schema/data
+azs export -c config.yaml
+
+# compare against DB
+azs compare -c config.yaml --import-dir export_output
+
+# import into DB
+azs import -c config.yaml --import-dir export_output --auto-confirm
+
+# copy data between two DBs (uses source/target in config)
+azs copy -c config.yaml --tables dbo.Table1,dbo.Table2
+
+# run web UI
+azs web
+
+# sync DB schema objects -> local sql files
+azs sync -c config.yaml --schema-name dbo
+
+# generate migration script from DB vs local files
+azs migrate -c config.yaml --schema-name dbo
 ```
 
-#### Non-Interactive Import
+## Commands
+
+- export: Export schema and optionally data to `output_directory`.
+- import: Import schema/data from `import_directory` with safe ALTER logic.
+- compare: Compare exported files with a live DB; produce reports.
+- copy: Copy table data using `source` → `target` profiles.
+- web: Flask web UI for export/import/compare workflows.
+- sync: Materialize DB objects to local `.sql` files per object type.
+- migrate: Create a migration script to reconcile local files to DB state.
+
+Run `azs <command> -h` for command-specific flags.
+
+## Unified config (config.yaml)
+
+Copy and edit:
 ```bash
-python azure_sql_import.py --config config.yaml --auto-confirm
+cp config.example.yaml config.yaml
 ```
+Key sections (YAML or JSON supported):
 
-#### Import with Custom Options
+- Connection (shared by most commands)
+  - server, database, authentication_type (sql|azure_ad), driver
+  - username/password (only for authentication_type: sql)
+
+- export
+  - output_directory, export_data, batch_size, data_format, reporting_interval
+  - include_schemas, exclude_schemas
+
+- import
+  - import_directory, confirm_each_object, truncate_before_load
+
+- compare
+  - show_data_samples, sample_size, export_report
+
+- copy
+  - source: connection profile
+  - target: connection profile
+  - tables, identity_insert, dry_run
+
+- web
+  - upload_folder, export_folder, max_content_length_mb
+
+- sync
+  - schema_name, sql_schema_dir
+
+- migrate
+  - schema_name, sql_schema_dir, migrations_dir
+
+See `config.example.yaml` for a complete, commented example.
+
+## Requirements
+
+- Python 3.8+
+- ODBC Driver 17 for SQL Server (or compatible)
+
+Install driver (macOS):
 ```bash
-python azure_sql_import.py --config config.yaml \
-  --import-dir /path/to/exported/files \
-  --truncate-tables \
-  --schema-only
+brew install --cask msodbcsql17 mssql-tools
 ```
 
-#### Analyze Dependencies
-```bash
-python azure_sql_import.py --config config.yaml --show-dependencies
-```
-
-### Comparison (Target Database)
-
-#### Basic Comparison
-```bash
-python azure_sql_compare.py --config config.yaml
-```
-
-#### Comparison with Custom Options
-```bash
-python azure_sql_compare.py --config config.yaml \
-  --import-dir /path/to/exported/files \
-  --no-samples \
-  --sample-size 10
-```
-
-### Export Options
-
-#### Schema Only (No Data)
-Edit your config file and set `export_data: false`
-
-#### Export Specific Schemas Only
-To export only specific schemas (e.g., only 'dbo' and 'custom_schema'):
-```yaml
-include_schemas:
-  - "dbo"
-  - "custom_schema"
-exclude_schemas: []
-```
-
-#### Binary Data Export
-For large datasets, use binary format for better performance and compression:
-```yaml
-data_format: "binary"      # Much faster and smaller files
-batch_size: 10000          # Larger batches for binary export
-reporting_interval: 1000   # Report progress every N batches (default: 1000)
-```
-
-**Binary Format Benefits:**
-- **Faster Export/Import**: 5-10x faster than SQL format
-- **Better Compression**: 60-80% smaller file sizes
-- **Preserves Data Types**: No string conversion issues
-- **Large Dataset Support**: Handles millions of rows efficiently
-- **Optimized Logging**: Configurable reporting to avoid performance impact
-- **ETA Tracking**: Real-time estimated completion time
-
-#### Performance Optimization
-For maximum performance with large datasets:
-```yaml
-# High-performance settings
-data_format: "binary"        # Use binary format
-batch_size: 10000           # Larger batches
-reporting_interval: 10000   # Report every 10,000 batches (less frequent logging)
-```
-
-**Performance Tips:**
-- **Binary Format**: Always use binary for large datasets (>100K rows)
-- **Larger Batches**: Increase `batch_size` for better throughput
-- **Less Frequent Logging**: Increase `reporting_interval` to reduce I/O overhead
-- **System Resources**: More RAM allows larger batch sizes
-- **ETA Monitoring**: Real-time completion estimates help plan operations
-
-#### ETA (Estimated Time of Arrival)
-The scripts now include real-time ETA calculations for better progress tracking:
-
-**Example Output:**
-```
-Processed batch 1000 for dbo.large_table (10000000/50000000 rows) - ETA: 14:35:22
-Processed batch 2000 for dbo.large_table (20000000/50000000 rows) - ETA: 14:32:15
-Processed batch 5000 for dbo.large_table (50000000/50000000 rows)
-```
-
-**ETA Features:**
-- **Real-time Calculation**: Based on current processing speed
-- **Accurate Estimates**: Improves as more data is processed
-- **Time Format**: Shows completion time in HH:MM:SS format
-- **Export & Import**: Works for both operations
-- **SQL & Binary**: Available for both data formats
-
-#### Smart Schema Comparison
-The comparison tools now intelligently ignore cosmetic differences that don't affect functionality:
-
-**Ignored Differences:**
-- **Generation Comments**: `-- Generated on 2025-09-11 21:37:29`
-- **Script Headers**: `-- Table schema for...`, `-- Object: Table...`
-- **Multi-line Comments**: `/* Object: StoredProcedure [schema].[name] */`
-- **SET Statements**: `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`
-- **GO Statements**: Batch separators
-- **Whitespace**: Extra spaces, tabs, blank lines
-- **Timestamp Variations**: Different generation times
-
-**Example:**
-```sql
--- These are considered IDENTICAL despite cosmetic differences:
-
--- File 1:
-/* Object: StoredProcedure [dbo].[sp_GetUser] */
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-ALTER PROCEDURE [dbo].[sp_GetUser] @UserId int AS BEGIN SELECT * FROM Users WHERE Id = @UserId END
-
--- File 2:
-/* Object: StoredProcedure [dbo].[sp_GetUser] - Generated on 2025-09-11 */
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-ALTER PROCEDURE [dbo].[sp_GetUser] @UserId int AS BEGIN SELECT * FROM Users WHERE Id = @UserId END
-
--- Version 1:
--- Generated on 2025-09-11 21:37:29
-CREATE TABLE [dbo].[Users] (
-    [ID] int IDENTITY(1,1) NOT NULL,
-    [Name] nvarchar(100) NOT NULL
-)
-
--- Version 2:
--- Generated on 2025-09-11 22:15:45
-CREATE TABLE [dbo].[Users] (
-    [ID] int IDENTITY(1,1) NOT NULL,
-    [Name] nvarchar(100) NOT NULL
-)
-```
-
-**Benefits:**
-- **Reduced False Positives**: No more alerts for identical schemas
-- **Focus on Real Changes**: Only shows meaningful differences
-- **Better User Experience**: Less noise in comparison results
-- **Accurate Import Decisions**: Confident choices about what to import
-- **Auto-Skip Identical**: No interactive prompts for identical objects
-- **Efficient Workflow**: Faster imports by skipping unnecessary operations
-
-#### Auto-Skip Identical Objects
-The import tool now automatically skips objects that are identical to existing ones:
-
-**Behavior:**
-- **No Interactive Prompt**: Identical objects are skipped without asking
-- **Automatic Detection**: Uses smart comparison to identify identical schemas
-- **Progress Logging**: Shows which objects were skipped and why
-- **Summary Report**: Displays count of imported vs skipped objects
-
-**Example Output:**
-```
-Skipping table dbo.Users - no differences found (identical)
-Skipping view dbo.UserSummary - no differences found (identical)
-
---- TABLES: dbo.Products ---
-Differences found:
-============================================================
-
-📄 EXISTING: Existing dbo.Products
-📄 NEW:      New dbo.Products
-❌ REMOVE:   [ID] int IDENTITY(1,1) NOT NULL,
-✅ ADD:      [ID] int IDENTITY(1,1) NOT NULL,
-✅ ADD:      [Price] decimal(10,2) NOT NULL,
-   CONTEXT:  [Name] nvarchar(100) NOT NULL,
-============================================================
-📋 ACTION: Will generate ALTER TABLE statements to update the existing table
-============================================================
-Import table dbo.Products? [y/N]: y
-
-Import summary: 1 objects imported, 2 identical objects skipped
-```
-
-**Benefits:**
-- **Faster Imports**: No time wasted on identical objects
-- **Cleaner Workflow**: Only interact with objects that actually need changes
-- **Better Focus**: Attention on objects that require decisions
-- **Reduced Errors**: Less chance of accidentally overwriting identical objects
-- **Clear Differences**: Visual diff display shows exactly what will change
-- **Action Preview**: Shows what type of operation will be performed
-
-#### Smart ALTER Logic for Existing Objects
-The import tool now uses proper ALTER statements instead of DROP/CREATE for existing objects:
-
-**Object-Specific Handling:**
-
-**Tables:**
-- **New Columns**: `ALTER TABLE [schema].[table] ADD [column] [type]`
-- **Modified Columns**: `ALTER TABLE [schema].[table] ALTER COLUMN [column] [new_type]`
-- **DEFAULT Constraints**: `ALTER TABLE [schema].[table] ADD CONSTRAINT [name] DEFAULT [value] FOR [column]`
-- **Constraint Management**: Automatically finds and drops existing constraints
-- **Dropped Columns**: Warning logged (manual review required)
-- **Preserves Data**: No data loss during schema changes
-
-**Views/Procedures/Functions:**
-- **CREATE OR ALTER**: Uses `CREATE OR ALTER` syntax
-- **Safe Replacement**: Automatically handles existing objects
-- **No Data Loss**: Preserves dependent objects
-
-**Triggers:**
-- **DROP + CREATE**: `DROP TRIGGER IF EXISTS` then `CREATE TRIGGER`
-- **Clean Recreation**: Ensures trigger is properly updated
-- **Safe Operation**: Uses `IF EXISTS` for safety
-
-**Example ALTER Operations:**
-```sql
--- Adding new column
-ALTER TABLE [dbo].[Users] ADD [Email] nvarchar(255) NULL
-
--- Modifying existing column
-ALTER TABLE [dbo].[Users] ALTER COLUMN [Name] nvarchar(200) NOT NULL
-
--- Adding DEFAULT constraint
-ALTER TABLE [dbo].[Users] ADD CONSTRAINT [DF_Users_Id] DEFAULT (newid()) FOR [Id]
-
--- Dropping existing DEFAULT constraint
-ALTER TABLE [dbo].[Users] DROP CONSTRAINT [DF_Users_CreatedDate]
-
--- Recreating trigger
-DROP TRIGGER IF EXISTS [dbo].[tr_Users_Update]
-CREATE TRIGGER [dbo].[tr_Users_Update] ON [dbo].[Users] FOR UPDATE AS ...
-
--- Updating procedure
-CREATE OR ALTER PROCEDURE [dbo].[sp_GetUser] @UserId int AS ...
-```
-
-**Benefits:**
-- **Data Preservation**: No data loss during schema updates
-- **Safe Operations**: Uses proper SQL Server syntax
-- **Incremental Changes**: Only modifies what's different
-- **Production Ready**: Safe for live database updates
-
-### Exclude System Schemas
-To exclude system schemas (default behavior):
-```yaml
-include_schemas: []
-exclude_schemas:
-  - "sys"
-  - "INFORMATION_SCHEMA"
-     - "guest"
-   ```
-
-### Import Options
-
-#### Interactive Mode Features
-- **Schema Comparison**: Shows differences between existing and new objects
-- **Data Import Choices**: Choose to truncate and import or append data
-- **Object-by-Object Confirmation**: Confirm each object before importing
-- **Detailed Differences**: See exactly what will change
-
-#### Command Line Options
-- `--auto-confirm`: Skip all interactive prompts
-- `--truncate-tables`: Truncate tables before importing data
-- `--no-alter`: Skip altering existing objects
-- `--schema-only`: Import schema only, skip data
-- `--import-dir`: Specify custom import directory
-- `--show-dependencies`: Analyze and display object dependencies
-
-#### Dependency Analysis
-The import tool automatically analyzes dependencies between database objects:
-- **Views** that depend on tables
-- **Functions** that reference other objects
-- **Stored Procedures** that call functions or reference tables
-- **Triggers** that depend on tables
-- **Cross-schema dependencies**
-
-Objects are imported in the correct order to avoid dependency errors.
-
-#### Comparison Options
-The comparison tool provides detailed analysis without making changes:
-- **Schema Comparison**: Shows differences between exported and database objects
-- **Data Comparison**: Compares row counts and shows sample data
-- **Change Categories**: New, modified, deleted, and unchanged objects
-- **Detailed Reports**: Export comprehensive comparison reports
-- **Safe Analysis**: Read-only operations that don't modify the database
-
-## Output Structure
-
-The script creates the following directory structure organized by object type:
-
-```
-export_output/
-├── schema/
-│   ├── tables/
-│   │   ├── dbo.table1.sql
-│   │   ├── dbo.table2.sql
-│   │   └── schema2.table3.sql
-│   ├── views/
-│   │   ├── dbo.view1.sql
-│   │   └── schema2.view2.sql
-│   ├── procedures/
-│   │   ├── dbo.procedure1.sql
-│   │   └── schema2.procedure2.sql
-│   ├── functions/
-│   │   ├── dbo.function1.sql
-│   │   └── schema2.function2.sql
-│   └── triggers/
-│       ├── dbo.trigger1.sql
-│       └── schema2.trigger2.sql
-├── data/
-│   ├── dbo.table1.sql
-│   ├── dbo.table2.sql
-│   └── schema2.table3.sql
-├── binary_data/          # When using binary format
-│   ├── dbo.table1.pkl.gz
-│   ├── dbo.table2.pkl.gz
-│   └── schema2.table3.pkl.gz
-└── migration_script.sql
-```
-
-## Migration Process
-
-### Complete Migration Workflow
-
-1. **Export from Source Database**:
-   ```bash
-   # Configure source database connection
-   cp config.example.yaml config.yaml
-   # Edit config.yaml with source database details
-   
-   # Export schema and data
-   python azure_sql_export.py --config config.yaml
-   ```
-
-2. **Compare with Target Database** (Optional but recommended):
-   ```bash
-   # Configure target database connection
-   cp config.compare.example.yaml config.yaml
-   # Edit config.yaml with target database details
-   
-   # Compare exported files with target database
-   python azure_sql_compare.py --config config.yaml
-   ```
-
-3. **Import to Target Database**:
-   ```bash
-   # Configure target database connection
-   cp config.import.example.yaml config.yaml
-   # Edit config.yaml with target database details
-   
-   # Interactive import with comparison
-   python azure_sql_import.py --config config.yaml
-   ```
-
-### Manual Migration (Alternative)
-
-1. **Run the export script** on your source Azure SQL Database
-2. **Review the generated files** in the output directory
-3. **On your target server**, run the files in this order:
-   - Schema files from `schema/` directory (tables first, then views, functions, procedures, triggers)
-   - Data files from `data/` directory (INSERT statements)
-4. **Use the migration_script.sql** as a reference for the proper order
-
-## Configuration Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `server` | Azure SQL Server name | Required |
-| `database` | Database name | Required |
-| `authentication_type` | "sql" or "azure_ad" | "sql" |
-| `username` | SQL Server username (for SQL auth) | Required for SQL auth |
-| `password` | SQL Server password (for SQL auth) | Required for SQL auth |
-| `driver` | ODBC driver name | "ODBC Driver 17 for SQL Server" |
-| `output_directory` | Output directory path | "export_output" |
-| `export_data` | Whether to export table data | true |
-| `batch_size` | Number of rows per batch | 1000 |
-| `data_format` | Data export format: "sql" or "binary" | "sql" |
-| `reporting_interval` | Report progress every N batches | 1000 |
-| `include_schemas` | List of schemas to include (empty = all) | [] |
-| `exclude_schemas` | List of schemas to exclude | ["sys", "INFORMATION_SCHEMA"] |
-
-### Import Configuration Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `import_directory` | Directory containing exported files | "export_output" |
-| `import_data` | Whether to import table data | true |
-| `data_format` | Data import format: "sql" or "binary" | "sql" |
-| `reporting_interval` | Report progress every N batches | 1000 |
-| `auto_confirm` | Skip interactive confirmations | false |
-| `truncate_tables` | Truncate tables before importing data | false |
-| `alter_existing` | Allow altering existing objects | true |
-
-### Comparison Configuration Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `import_directory` | Directory containing exported files | "export_output" |
-| `show_data_samples` | Show sample data in comparison | true |
-| `sample_size` | Number of sample rows to show | 5 |
-| `export_report` | Export detailed report to file | true |
-| `data_format` | Data format to compare: "sql" or "binary" | "sql" |
-
-## Troubleshooting
-
-### Connection Issues
-- Ensure your Azure SQL Database allows connections from your IP
-- Check firewall rules in Azure portal
-- Verify authentication credentials
-- For Azure AD auth, ensure you're logged in with `az login`
-
-### ODBC Driver Issues
-- Install the latest ODBC Driver for SQL Server
-- On Linux/Mac, you may need to install additional dependencies
-
-### Large Database Issues
-- Increase `batch_size` for better performance
-- Consider exporting data separately if memory is limited
-- Monitor disk space for large exports
-
-## Logging
-
-The script creates detailed logs in `azure_sql_export.log` and displays progress in the console.
-
-## Configuration File Support
-
-The tool supports both YAML and JSON configuration files:
-- **YAML** (recommended): More readable with comments and better structure
-- **JSON**: Traditional format, still supported for compatibility
-
-## Security Notes
-
-- Never commit configuration files with real credentials
-- Use environment variables for sensitive data in production
-- Consider using Azure Key Vault for credential management
-- Ensure proper network security for database connections
+## Notes
+
+- Auth:
+  - sql: uses username/password from config
+  - azure_ad: uses `ActiveDirectoryDefault` (interactive/managed identity as supported by the environment)
+- Large datasets: Prefer `data_format: binary` and increase `batch_size` for performance.
+- Logs: individual commands write `azure_sql_*.log` in repo root.
 
 ## License
 
-This tool is provided as-is for educational and migration purposes.
+MIT
+
+## Detailed features
+
+### Export (azs export)
+- Schema export: tables, views, procedures, functions, triggers
+- Data export: INSERT statements or binary format (fast, compressed)
+- Structured output directories per object type
+- Auth: SQL auth and Azure AD
+- Progress logging with configurable intervals
+
+### Import (azs import)
+- Interactive or non-interactive imports
+- Smart diff against target, auto-skip identical objects
+- Safe ALTER-first logic for existing objects; preserves data
+- Dependency analysis and topological ordering
+- Supports importing data with truncate/append options
+
+### Compare (azs compare)
+- Compare exported files vs live DB
+- Change categories: new, modified, deleted, unchanged
+- Optional sample data comparison
+- Exportable reports for auditing
+
+### Copy (azs copy)
+- Copy table data source → target using profiles in config
+- Batch copy with retries and identity insert handling
+- Dry-run mode
+
+### Web (azs web)
+- Bootstrap UI for export/import/compare
+- Background operations with progress and logs
+- Upload/download support
+
+### Sync (azs sync)
+- Materialize DB objects to local `.sql` files per type
+- Creates/updates/cleans files to match live DB for a schema
+
+### Migrate (azs migrate)
+- Generate migration script that reconciles local files to live DB state
+- Uses schema-specific comparisons and produces numbered `updateXXXX.sql`
+
+## Command usage examples
+
+### export
+```bash
+azs export -c config.yaml \
+  --output-directory ./export_output \
+  --data-format sql \
+  --batch-size 1000
+```
+
+### import
+```bash
+azs import -c config.yaml \
+  --import-dir ./export_output \
+  --auto-confirm \
+  --truncate-tables
+```
+
+### compare
+```bash
+azs compare -c config.yaml \
+  --import-dir ./export_output \
+  --sample-size 5
+```
+
+### copy
+```bash
+azs copy -c config.yaml \
+  --tables dbo.Table1,dbo.Table2 \
+  --identity-insert auto \
+  --dry-run
+```
+
+### web
+```bash
+azs web
+# open http://localhost:5000
+```
+
+### sync
+```bash
+azs sync -c config.yaml \
+  --schema-name dbo \
+  --sql-schema-dir sql/schema
+```
+
+### migrate
+```bash
+azs migrate -c config.yaml \
+  --schema-name dbo \
+  --sql-schema-dir sql/schema \
+  --migrations-dir sql/migrations
+```
+
+## Options reference
+
+### Shared connection keys (config)
+- server: Azure SQL server hostname
+- database: database name
+- authentication_type: sql | azure_ad
+- driver: ODBC driver name (e.g., ODBC Driver 17 for SQL Server)
+- username/password: required for sql auth
+
+### export options
+- output_directory: path for results
+- export_data: true|false
+- batch_size: int
+- data_format: sql|binary
+- reporting_interval: int
+- include_schemas: [schema,...]
+- exclude_schemas: [schema,...]
+
+### import options
+- import_directory: path from export
+- confirm_each_object: true|false
+- truncate_before_load: true|false
+
+### compare options
+- import_directory: path from export
+- show_data_samples: true|false
+- sample_size: int
+- export_report: true|false
+
+### copy options
+- source: connection profile
+- target: connection profile
+- tables: [qualified names] or comma-separated via CLI
+- identity_insert: auto|on|off
+- dry_run: true|false
+
+### web options
+- upload_folder: path
+- export_folder: path
+- max_content_length_mb: int
+
+### sync options
+- schema_name: schema to fetch (e.g., dbo)
+- sql_schema_dir: local folder for object files
+
+### migrate options
+- schema_name: schema to compare
+- sql_schema_dir: local folder for existing object files
+- migrations_dir: output folder for generated scripts
+
+## Performance tips
+- Prefer data_format: binary for large datasets
+- Increase batch_size and reduce reporting frequency for throughput
+- Ensure ODBC driver is up-to-date
+- Run from a host near the database to lower latency
+
+## Troubleshooting
+- Authentication
+  - sql: verify username/password and firewall rules
+  - azure_ad: ensure environment supports `ActiveDirectoryDefault` (e.g., `az login`)
+- ODBC driver
+  - macOS: install msodbcsql17 and mssql-tools via Homebrew
+  - Linux: follow Microsoft docs for your distro
+- Permissions
+  - Ensure account has rights to read schema, create/alter objects when importing
+- File paths
+  - Use absolute paths for export/import directories if running outside repo root
