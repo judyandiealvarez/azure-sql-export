@@ -1,68 +1,75 @@
-#!/usr/bin/env python3
-"""
-azs - unified CLI for Azure SQL tools in this repo
+#!/usr/bin/env sh
+# Cross-platform shim for azs CLI (mirrors azs.cmd behavior)
+# Prefer installed azs on PATH; fallback to running the Python module.
 
-Usage:
-  azs <command> [args...]
+if command -v azs >/dev/null 2>&1; then
+  exec azs "$@"
+fi
 
-Commands:
-  export   Run azure_sql_export.py
-  import   Run azure_sql_import.py
-  compare  Run azure_sql_compare.py
-  copy     Run azure_sql_copy.py
-  web      Run azure_sql_web.py
+if command -v python3 >/dev/null 2>&1; then
+  PY=python3
+elif command -v python >/dev/null 2>&1; then
+  PY=python
+else
+  echo "python interpreter not found in PATH" >&2
+  exit 127
+fi
 
-Examples:
-  azs export -c config.yaml -o ./exports
-  azs import -c config.yaml ./exports
-  azs compare -c config.yaml --import-dir ./exports
-  azs copy -c config.yaml --tables table1,table2
-  azs web
-"""
+# Ensure required deps are installed (best-effort), with venv fallback
+NEEDED_MODS="yaml pandas flask pyodbc sqlparse sqlglot werkzeug"
+need_install=0
+for mod in $NEEDED_MODS; do
+  "$PY" -c "import $mod" >/dev/null 2>&1 || { need_install=1; break; }
+done
 
-import sys
-import subprocess
-from pathlib import Path
+if [ "$need_install" -eq 1 ] && [ -f "requirements.txt" ]; then
+  echo "[azs] Dependencies missing. Attempting to install from requirements.txt..." >&2
+  if "$PY" -m pip install -r requirements.txt --disable-pip-version-check >/dev/null 2>&1; then
+    need_install=0
+  else
+    echo "[azs] System install failed (PEP 668 or permissions)." >&2
+    # Try user install
+    if "$PY" -m pip install --user -r requirements.txt --disable-pip-version-check >/dev/null 2>&1; then
+      need_install=0
+    else
+      need_install=1
+    fi
+  fi
+fi
 
+if [ "$need_install" -eq 1 ] && [ -f "requirements.txt" ]; then
+  echo "[azs] Create a local virtual environment at .venv and install there? [Y/n]" >&2
+  # Read from tty if available to avoid piping issues
+  if [ -t 0 ]; then
+    read ans
+  else
+    ans="Y"
+  fi
+  case "$ans" in
+    n|N|no|No)
+      echo "[azs] Skipping venv creation. You may run: $PY -m pip install -r requirements.txt" >&2
+      ;;
+    *)
+      echo "[azs] Creating .venv and installing deps..." >&2
+      if "$PY" -m venv .venv >/dev/null 2>&1; then
+        # shellcheck disable=SC1091
+        if [ -f .venv/bin/activate ]; then . .venv/bin/activate; fi
+        VENV_PY=".venv/bin/python"
+        if [ ! -x "$VENV_PY" ]; then VENV_PY="$PY"; fi
+        if "$VENV_PY" -m pip install -U pip >/dev/null 2>&1 && \
+           "$VENV_PY" -m pip install -r requirements.txt >/dev/null 2>&1; then
+          PY="$VENV_PY"
+          echo "[azs] Using virtual environment at .venv" >&2
+        else
+          echo "[azs] Failed to install dependencies in .venv" >&2
+        fi
+      else
+        echo "[azs] Failed to create virtual environment (.venv)" >&2
+      fi
+      ;;
+  esac
+fi
 
-def print_usage() -> None:
-    print(__doc__.strip())
-
-
-def main() -> int:
-    if len(sys.argv) < 2 or sys.argv[1] in {"-h", "--help", "help"}:
-        # If user asked help for a specific command: azs help <cmd>
-        if len(sys.argv) == 3 and sys.argv[1] in {"help"}:
-            cmd = sys.argv[2]
-        else:
-            print_usage()
-            return 0
-    else:
-        cmd = sys.argv[1]
-
-    script_dir = Path(__file__).resolve().parent
-    modules = {
-        "export": "pyazs.export",
-        "import": "pyazs.imp",
-        "compare": "pyazs.compare",
-        "copy": "pyazs.copy",
-        "web": "pyazs.web",
-        "migrate": "pyazs.migrate",
-        "sync": "pyazs.sync",
-    }
-
-    if cmd not in modules:
-        print(f"Unknown command: {cmd}\n")
-        print_usage()
-        return 2
-
-    # Forward remaining args to the target module via -m
-    forward_args = sys.argv[2:] if len(sys.argv) > 2 else []
-    proc = subprocess.run([sys.executable, "-m", modules[cmd], *forward_args])
-    return proc.returncode
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+exec "$PY" -m pyazs.cli "$@"
 
 
