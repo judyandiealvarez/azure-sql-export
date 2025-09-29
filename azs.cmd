@@ -46,13 +46,18 @@ if defined NEED_INSTALL (
   if /i "%ANSWER%"=="" set ANSWER=Y
   if /i not "%ANSWER%"=="N" if /i not "%ANSWER%"=="No" (
     echo [azs] Creating .venv and installing deps...
-    %PY% -m venv .venv && (
-      call .venv\Scripts\activate && (
-        .venv\Scripts\python -m pip install -U pip && \
-        .venv\Scripts\python -m pip install -r requirements.txt && \
-        set PY=.venv\Scripts\python && echo [azs] Using virtual environment at .venv
-      )
+    %PY% -m venv .venv
+    if %ERRORLEVEL% NEQ 0 goto after_venv
+    call .venv\Scripts\activate
+    if %ERRORLEVEL% NEQ 0 goto after_venv
+    .venv\Scripts\python -m pip install -U pip
+    if %ERRORLEVEL% NEQ 0 goto after_venv
+    .venv\Scripts\python -m pip install -r requirements.txt
+    if %ERRORLEVEL% EQU 0 (
+      set PY=.venv\Scripts\python
+      echo [azs] Using virtual environment at .venv
     )
+    :after_venv
   ) else (
     echo [azs] Skipping venv creation. You may run: %PY% -m pip install -r requirements.txt
   )
