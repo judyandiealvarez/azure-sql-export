@@ -74,7 +74,7 @@ def _build_conn_str(config: Dict) -> str:
         raise SystemExit('Missing username/password for SQL authentication in config')
 
     return (
-        "DRIVER={" + driver + ";" +
+        "DRIVER={" + driver + "};" +
         "SERVER=" + server + ";" +
         "DATABASE=" + database + ";" +
         "UID=" + str(username) + ";" +
