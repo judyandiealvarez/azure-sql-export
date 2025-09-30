@@ -6,7 +6,8 @@ import yaml
 import argparse
 import pyodbc
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List, DefaultDict
+from collections import defaultdict
 
 OBJECT_QUERIES = {
     'Tables': """
@@ -97,7 +98,11 @@ def get_file_objects(folder: str):
 
 def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str):
     conn_str = _build_conn_str(config)
-    migration_sql = []
+    migration_sql: List[str] = []
+    # Summary buckets
+    created: DefaultDict[str, List[str]] = defaultdict(list)
+    updated: DefaultDict[str, List[str]] = defaultdict(list)
+    dropped: DefaultDict[str, List[str]] = defaultdict(list)
 
     with pyodbc.connect(conn_str) as conn:
         cursor = conn.cursor()
@@ -111,16 +116,19 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
             for name, db_def in db_objs.items():
                 file_def = file_objs.get(name)
                 if file_def is None:
+                    created[obj_type].append(name)
                     migration_sql.append(f"-- Create {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
                 else:
                     def norm(s):
                         return '\n'.join(line.rstrip() for line in s.replace('\r\n', '\n').replace('\r', '\n').split('\n')).strip()
                     if norm(file_def) != norm(db_def):
+                        updated[obj_type].append(name)
                         migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
 
             # Find objects to drop (in files but not in DB)
             for name, _ in file_objs.items():
                 if name not in db_objs:
+                    dropped[obj_type].append(name)
                     if obj_type == 'Tables':
                         migration_sql.append(f"DROP TABLE [{schema_name}].[{name}];\n")
                     elif obj_type == 'Views':
@@ -140,8 +148,23 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
         filename = f"update{next_num:04d}.sql"
         outfile = os.path.join(migrations_dir, filename)
         with open(outfile, 'w', encoding='utf-8') as f:
-            f.write('-- Auto-generated migration\n')
-            f.write(f'-- Generated at {datetime.utcnow().isoformat()}Z\n\n')
+            # Brief summary header
+            f.write('-- Migration Summary\n')
+            f.write(f"-- Schema: {schema_name}\n")
+            total_created = sum(len(v) for v in created.values())
+            total_updated = sum(len(v) for v in updated.values())
+            total_dropped = sum(len(v) for v in dropped.values())
+            f.write(f"-- Created: {total_created}, Updated: {total_updated}, Dropped: {total_dropped}\n")
+            for section_name, bucket in (("Created", created), ("Updated", updated), ("Dropped", dropped)):
+                if any(bucket.values()):
+                    items = []
+                    for typ, names in bucket.items():
+                        if names:
+                            items.append(f"{typ}=[{', '.join(sorted(names))}]")
+                    f.write(f"-- {section_name}: " + "; ".join(items) + "\n")
+            f.write(f"-- Generated at {datetime.utcnow().isoformat()}Z\n")
+            f.write('\n')
+            # SQL body
             f.write('\n'.join(migration_sql))
         print(f"Migration written to {outfile}")
     else:
