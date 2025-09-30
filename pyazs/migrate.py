@@ -150,17 +150,45 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description='Generate SQL migrations by comparing DB to local files')
-    parser.add_argument('-c', '--config', required=True, help='Path to YAML/JSON config')
-    parser.add_argument('--schema-name', required=True, help='Schema name (e.g., BPG_FinOps_Invoice_Reimbursement)')
-    parser.add_argument('--sql-schema-dir', default=os.path.join('sql', 'schema'), help='Local schema root directory')
-    parser.add_argument('--migrations-dir', default=os.path.join('sql', 'migrations'), help='Output migrations directory')
+    parser.add_argument('-c', '--config', default='config.yaml', help='Path to YAML/JSON config (default: config.yaml)')
+    parser.add_argument('--schema-name', help='Schema name (e.g., dbo). Overrides config.migrate.schema_name or top-level schema/schema_name')
+    parser.add_argument('--sql-schema-dir', help='Local schema root directory. Overrides config.migrate.sql_schema_dir or top-level sql_schema_dir')
+    parser.add_argument('--migrations-dir', help='Output migrations directory. Overrides config.migrate.migrations_dir or top-level migrations_dir')
     args = parser.parse_args(argv)
 
+    if not os.path.exists(args.config):
+        raise SystemExit(f"Config file not found: {args.config}")
     config = _load_config(args.config)
+
+    migrate_cfg = (config.get('migrate') or {}) if isinstance(config, dict) else {}
+
+    # Resolve with precedence: CLI > migrate.* > top-level keys > defaults
+    schema_name = (
+        args.schema_name or
+        migrate_cfg.get('schema_name') or
+        config.get('schema_name') or
+        config.get('schema')
+    )
+    if not schema_name:
+        raise SystemExit('schema_name must be provided via --schema-name or config (migrate.schema_name or top-level schema/schema_name)')
+
+    sql_schema_dir = (
+        args.sql_schema_dir or
+        migrate_cfg.get('sql_schema_dir') or
+        config.get('sql_schema_dir') or
+        os.path.join('sql', 'schema')
+    )
+    migrations_dir = (
+        args.migrations_dir or
+        migrate_cfg.get('migrations_dir') or
+        config.get('migrations_dir') or
+        os.path.join('sql', 'migrations')
+    )
+
     generate_migration(config=config,
-                       sql_schema_dir=args.sql_schema_dir,
-                       migrations_dir=args.migrations_dir,
-                       schema_name=args.schema_name)
+                       sql_schema_dir=sql_schema_dir,
+                       migrations_dir=migrations_dir,
+                       schema_name=schema_name)
     return 0
 
 
