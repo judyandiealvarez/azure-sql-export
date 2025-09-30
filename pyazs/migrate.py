@@ -165,18 +165,17 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                 d = len(dropped.get(typ, []))
                 f.write('-- | ' + _format_table_row([typ, str(c), str(u), str(d)]) + ' |\n')
             f.write('--\n')
-            # Details tables per type (names)
+            # Flat detailed table: one row per object
+            f.write('-- Details\n')
+            f.write('-- | Change | Type | Object |\n')
+            f.write('-- |--------|------|--------|\n')
             for typ in types_order:
-                c_list = ', '.join(sorted(created.get(typ, []))) or '-'
-                u_list = ', '.join(sorted(updated.get(typ, []))) or '-'
-                d_list = ', '.join(sorted(dropped.get(typ, []))) or '-'
-                f.write(f"-- {typ}\n")
-                f.write('-- | Change | Objects |\n')
-                f.write('-- |--------|---------|\n')
-                f.write('-- | Created | ' + c_list + ' |\n')
-                f.write('-- | Updated | ' + u_list + ' |\n')
-                f.write('-- | Dropped | ' + d_list + ' |\n')
-                f.write('--\n')
+                for name in sorted(created.get(typ, [])):
+                    f.write('-- | Created | ' + _format_table_row([typ, name]) + ' |\n')
+                for name in sorted(updated.get(typ, [])):
+                    f.write('-- | Updated | ' + _format_table_row([typ, name]) + ' |\n')
+                for name in sorted(dropped.get(typ, [])):
+                    f.write('-- | Dropped | ' + _format_table_row([typ, name]) + ' |\n')
             f.write(f"-- Generated at {datetime.utcnow().isoformat()}Z\n\n")
             # SQL body
             f.write('\n'.join(migration_sql))
