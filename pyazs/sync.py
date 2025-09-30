@@ -37,11 +37,9 @@ OBJECT_QUERIES = {
         WHERE s.name = ? AND f.type IN ('FN','TF','IF')
     """,
     'Triggers': """
-        SELECT tr.name, m.definition
+        SELECT tr.name, OBJECT_DEFINITION(tr.object_id) AS definition
         FROM sys.triggers tr
-        JOIN sys.schemas s ON tr.schema_id = s.schema_id
-        CROSS APPLY (SELECT OBJECT_DEFINITION(tr.object_id) AS definition) m
-        WHERE s.name = ?
+        WHERE OBJECT_SCHEMA_NAME(tr.parent_id) = ?
     """
 }
 
@@ -73,7 +71,7 @@ def _build_conn_str(config: Dict) -> str:
         raise SystemExit('Missing username/password for SQL authentication in config')
 
     return (
-        "DRIVER={" + driver + "};" +
+        "DRIVER={" + driver + ";" +
         "SERVER=" + server + ";" +
         "DATABASE=" + database + ";" +
         "UID=" + str(username) + ";" +
@@ -120,15 +118,24 @@ def sync_schema_objects(config: Dict, sql_schema_dir: str, schema_name: str):
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description='Sync DB schema objects to local .sql files')
-    parser.add_argument('-c', '--config', required=True, help='Path to YAML/JSON config')
-    parser.add_argument('--schema-name', required=True, help='Schema name (e.g., BPG_FinOps_Invoice_Reimbursement)')
-    parser.add_argument('--sql-schema-dir', default=os.path.join('sql', 'schema'), help='Local schema root directory')
+    parser.add_argument('-c', '--config', default='config.yaml', help='Path to YAML/JSON config (default: config.yaml)')
+    parser.add_argument('--schema-name', help='Schema name (e.g., dbo). Overrides config.sync.schema_name')
+    parser.add_argument('--sql-schema-dir', help='Local schema root. Overrides config.sync.sql_schema_dir')
     args = parser.parse_args(argv)
 
+    if not os.path.exists(args.config):
+        raise SystemExit(f"Config file not found: {args.config}")
     config = _load_config(args.config)
+
+    sync_cfg = (config.get('sync') or {}) if isinstance(config, dict) else {}
+    schema_name = args.schema_name or sync_cfg.get('schema_name')
+    if not schema_name:
+        raise SystemExit('schema_name must be provided via --schema-name or config.sync.schema_name')
+    sql_schema_dir = args.sql_schema_dir or sync_cfg.get('sql_schema_dir') or os.path.join('sql', 'schema')
+
     sync_schema_objects(config=config,
-                        sql_schema_dir=args.sql_schema_dir,
-                        schema_name=args.schema_name)
+                        sql_schema_dir=sql_schema_dir,
+                        schema_name=schema_name)
     return 0
 
 
