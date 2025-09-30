@@ -8,6 +8,7 @@ import pyodbc
 from datetime import datetime
 from typing import Dict, List, DefaultDict
 from collections import defaultdict
+import re
 
 OBJECT_QUERIES = {
     'Tables': """
@@ -96,8 +97,29 @@ def get_file_objects(folder: str):
     return result
 
 
-def _format_table_row(cols: List[str]) -> str:
-    return " | ".join(cols)
+_COMMENT_LINE = re.compile(r"--.*?$", re.MULTILINE)
+_COMMENT_BLOCK = re.compile(r"/\*.*?\*/", re.DOTALL)
+_SET_LINES = re.compile(r"^\s*SET\s+(ANSI_NULLS|QUOTED_IDENTIFIER)\s+(ON|OFF)\s*;?\s*$", re.IGNORECASE | re.MULTILINE)
+_GO_LINES = re.compile(r"^\s*GO\s*$", re.IGNORECASE | re.MULTILINE)
+_WHITESPACE = re.compile(r"\s+")
+
+
+def _normalize_sql(sql: str) -> str:
+    if not sql:
+        return ""
+    s = sql
+    s = _COMMENT_BLOCK.sub(" ", s)
+    s = _COMMENT_LINE.sub(" ", s)
+    s = _SET_LINES.sub(" ", s)
+    s = _GO_LINES.sub(" ", s)
+    # Collapse whitespace and lowercase for stable comparison
+    s = _WHITESPACE.sub(" ", s)
+    s = s.strip().lower()
+    return s
+
+
+def _same_definition(file_def: str, db_def: str) -> bool:
+    return _normalize_sql(file_def) == _normalize_sql(db_def)
 
 
 def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str):
@@ -123,9 +145,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                     created[obj_type].append(name)
                     migration_sql.append(f"-- Create {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
                 else:
-                    def norm(s):
-                        return '\n'.join(line.rstrip() for line in s.replace('\r\n', '\n').replace('\r', '\n').split('\n')).strip()
-                    if norm(file_def) != norm(db_def):
+                    if not _same_definition(file_def, db_def):
                         updated[obj_type].append(name)
                         migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
 
@@ -152,10 +172,9 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
         filename = f"update{next_num:04d}.sql"
         outfile = os.path.join(migrations_dir, filename)
         with open(outfile, 'w', encoding='utf-8') as f:
-            # Brief summary header as tables
+            # Counts table
             f.write('-- Summary\n')
             f.write(f"-- Schema: {schema_name}\n")
-            # Counts table
             types_order = ['Tables', 'Views', 'StoredProcedures', 'Functions', 'Triggers']
             f.write('-- | Type | Created | Updated | Dropped |\n')
             f.write('-- |------|---------:|---------:|---------:|\n')
@@ -163,7 +182,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                 c = len(created.get(typ, []))
                 u = len(updated.get(typ, []))
                 d = len(dropped.get(typ, []))
-                f.write('-- | ' + _format_table_row([typ, str(c), str(u), str(d)]) + ' |\n')
+                f.write(f"-- | {typ} | {c} | {u} | {d} |\n")
             f.write('--\n')
             # Flat detailed table: one row per object
             f.write('-- Details\n')
@@ -171,11 +190,11 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
             f.write('-- |--------|------|--------|\n')
             for typ in types_order:
                 for name in sorted(created.get(typ, [])):
-                    f.write('-- | Created | ' + _format_table_row([typ, name]) + ' |\n')
+                    f.write(f"-- | Created | {typ} | {name} |\n")
                 for name in sorted(updated.get(typ, [])):
-                    f.write('-- | Updated | ' + _format_table_row([typ, name]) + ' |\n')
+                    f.write(f"-- | Updated | {typ} | {name} |\n")
                 for name in sorted(dropped.get(typ, [])):
-                    f.write('-- | Dropped | ' + _format_table_row([typ, name]) + ' |\n')
+                    f.write(f"-- | Dropped | {typ} | {name} |\n")
             f.write(f"-- Generated at {datetime.utcnow().isoformat()}Z\n\n")
             # SQL body
             f.write('\n'.join(migration_sql))
