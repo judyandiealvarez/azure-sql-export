@@ -96,6 +96,10 @@ def get_file_objects(folder: str):
     return result
 
 
+def _format_table_row(cols: List[str]) -> str:
+    return " | ".join(cols)
+
+
 def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str):
     conn_str = _build_conn_str(config)
     migration_sql: List[str] = []
@@ -148,22 +152,32 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
         filename = f"update{next_num:04d}.sql"
         outfile = os.path.join(migrations_dir, filename)
         with open(outfile, 'w', encoding='utf-8') as f:
-            # Brief summary header
-            f.write('-- Migration Summary\n')
+            # Brief summary header as tables
+            f.write('-- Summary\n')
             f.write(f"-- Schema: {schema_name}\n")
-            total_created = sum(len(v) for v in created.values())
-            total_updated = sum(len(v) for v in updated.values())
-            total_dropped = sum(len(v) for v in dropped.values())
-            f.write(f"-- Created: {total_created}, Updated: {total_updated}, Dropped: {total_dropped}\n")
-            for section_name, bucket in (("Created", created), ("Updated", updated), ("Dropped", dropped)):
-                if any(bucket.values()):
-                    items = []
-                    for typ, names in bucket.items():
-                        if names:
-                            items.append(f"{typ}=[{', '.join(sorted(names))}]")
-                    f.write(f"-- {section_name}: " + "; ".join(items) + "\n")
-            f.write(f"-- Generated at {datetime.utcnow().isoformat()}Z\n")
-            f.write('\n')
+            # Counts table
+            types_order = ['Tables', 'Views', 'StoredProcedures', 'Functions', 'Triggers']
+            f.write('-- | Type | Created | Updated | Dropped |\n')
+            f.write('-- |------|---------:|---------:|---------:|\n')
+            for typ in types_order:
+                c = len(created.get(typ, []))
+                u = len(updated.get(typ, []))
+                d = len(dropped.get(typ, []))
+                f.write('-- | ' + _format_table_row([typ, str(c), str(u), str(d)]) + ' |\n')
+            f.write('--\n')
+            # Details tables per type (names)
+            for typ in types_order:
+                c_list = ', '.join(sorted(created.get(typ, []))) or '-'
+                u_list = ', '.join(sorted(updated.get(typ, []))) or '-'
+                d_list = ', '.join(sorted(dropped.get(typ, []))) or '-'
+                f.write(f"-- {typ}\n")
+                f.write('-- | Change | Objects |\n')
+                f.write('-- |--------|---------|\n')
+                f.write('-- | Created | ' + c_list + ' |\n')
+                f.write('-- | Updated | ' + u_list + ' |\n')
+                f.write('-- | Dropped | ' + d_list + ' |\n')
+                f.write('--\n')
+            f.write(f"-- Generated at {datetime.utcnow().isoformat()}Z\n\n")
             # SQL body
             f.write('\n'.join(migration_sql))
         print(f"Migration written to {outfile}")
