@@ -37,9 +37,12 @@ OBJECT_QUERIES = {
         WHERE s.name = ? AND f.type IN ('FN','TF','IF')
     """,
     'Triggers': """
-        SELECT tr.name, OBJECT_DEFINITION(tr.object_id) AS definition
+        SELECT tr.name, m.definition
         FROM sys.triggers tr
-        WHERE OBJECT_SCHEMA_NAME(tr.parent_id) = ?
+        JOIN sys.objects o ON tr.parent_id = o.object_id
+        JOIN sys.schemas s ON o.schema_id = s.schema_id
+        CROSS APPLY (SELECT OBJECT_DEFINITION(tr.object_id) AS definition) m
+        WHERE s.name = ?
     """
 }
 
