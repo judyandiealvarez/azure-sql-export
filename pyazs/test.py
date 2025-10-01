@@ -85,10 +85,9 @@ def main(argv=None) -> int:
     schema_name = (
         args.schema_name or
         config.get('schema_name') or
-        config.get('schema')
+        config.get('schema') or
+        'dbo'
     )
-    if not schema_name:
-        raise SystemExit('schema_name must be provided via --schema-name or config (schema_name or schema)')
 
     test_object(config=config,
                 object_name=args.object_name,
