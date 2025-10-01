@@ -85,8 +85,7 @@ def main(argv=None) -> int:
     schema_name = (
         args.schema_name or
         config.get('schema_name') or
-        config.get('schema') or
-        'dbo'
+        config.get('schema')
     )
 
     test_object(config=config,
