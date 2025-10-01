@@ -46,7 +46,7 @@ def _build_conn_str(config):
     )
 
 
-def test_object(config, object_name: str, schema_name: str, hex_output: bool = False):
+def test_object(config, object_name: str, schema_name: str, hex_output: bool = False, output_file: str = None):
     conn_str = _build_conn_str(config)
     
     with pyodbc.connect(conn_str) as conn:
@@ -59,24 +59,29 @@ def test_object(config, object_name: str, schema_name: str, hex_output: bool = F
                 definition = db_objs[object_name]
                 print(f"Found {obj_type[:-1]}: {object_name}")
                 
-                if hex_output:
-                    print("Definition (hex):")
-                    print(definition)
-                    print("Hex breakdown:")
-                    hex_chars = []
-                    for char in definition:
-                        if char == '\n':
-                            hex_chars.append(f"\\n (0x{ord(char):02x})")
-                        elif char == '\r':
-                            hex_chars.append(f"\\r (0x{ord(char):02x})")
-                        elif char == '\t':
-                            hex_chars.append(f"\\t (0x{ord(char):02x})")
-                        else:
-                            hex_chars.append(f"{char} (0x{ord(char):02x})")
-                    print(" ".join(hex_chars))
+                if output_file:
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        f.write(definition)
+                    print(f"Definition written to: {output_file}")
                 else:
-                    print("Definition:")
-                    print(definition)
+                    if hex_output:
+                        print("Definition (hex):")
+                        print(definition)
+                        print("Hex breakdown:")
+                        hex_chars = []
+                        for char in definition:
+                            if char == '\n':
+                                hex_chars.append(f"\\n (0x{ord(char):02x})")
+                            elif char == '\r':
+                                hex_chars.append(f"\\r (0x{ord(char):02x})")
+                            elif char == '\t':
+                                hex_chars.append(f"\\t (0x{ord(char):02x})")
+                            else:
+                                hex_chars.append(f"{char} (0x{ord(char):02x})")
+                        print(" ".join(hex_chars))
+                    else:
+                        print("Definition:")
+                        print(definition)
                 return
         
         print(f"Object '{object_name}' not found in schema '{schema_name}'")
@@ -87,6 +92,7 @@ def main(argv=None) -> int:
     parser.add_argument('-c', '--config', default='config.yaml', help='Path to YAML/JSON config (default: config.yaml)')
     parser.add_argument('--schema-name', help='Schema name (overrides config)')
     parser.add_argument('--hex', action='store_true', help='Output definition in hex format')
+    parser.add_argument('-o', '--output', help='Write definition to file instead of console')
     parser.add_argument('object_name', help='Name of the object to find')
     args = parser.parse_args(argv)
 
@@ -103,7 +109,8 @@ def main(argv=None) -> int:
     test_object(config=config,
                 object_name=args.object_name,
                 schema_name=schema_name,
-                hex_output=args.hex)
+                hex_output=args.hex,
+                output_file=args.output)
     return 0
 
 
