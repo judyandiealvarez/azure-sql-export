@@ -4,7 +4,10 @@ import json
 import yaml
 import argparse
 import pyodbc
-from pyazs.common import get_db_objects, OBJECT_QUERIES
+try:
+    from .common import get_db_objects, OBJECT_QUERIES
+except ImportError:
+    from common import get_db_objects, OBJECT_QUERIES
 
 
 def _load_config(config_path: str):
