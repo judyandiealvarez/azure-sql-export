@@ -8,7 +8,6 @@ import pyodbc
 from datetime import datetime
 from typing import Dict, List, DefaultDict
 from collections import defaultdict
-import difflib
 
 OBJECT_QUERIES = {
     'Tables': """
