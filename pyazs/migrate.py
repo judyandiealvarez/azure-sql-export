@@ -8,6 +8,7 @@ import pyodbc
 from datetime import datetime
 from typing import Dict, List, DefaultDict
 from collections import defaultdict
+import difflib
 
 OBJECT_QUERIES = {
     'Tables': """
@@ -106,13 +107,15 @@ def _same_definition(file_def: str, db_def: str) -> bool:
     return _normalize_newlines(file_def) == _normalize_newlines(db_def)
 
 
-def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str):
+def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str, debug_diff: int = 0):
     conn_str = _build_conn_str(config)
     migration_sql: List[str] = []
     # Summary buckets
     created: DefaultDict[str, List[str]] = defaultdict(list)
     updated: DefaultDict[str, List[str]] = defaultdict(list)
     dropped: DefaultDict[str, List[str]] = defaultdict(list)
+
+    debug_shown = 0
 
     with pyodbc.connect(conn_str) as conn:
         cursor = conn.cursor()
@@ -132,6 +135,13 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                     if not _same_definition(file_def, db_def):
                         updated[obj_type].append(name)
                         migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
+                        if debug_shown < debug_diff:
+                            debug_shown += 1
+                            print(f"[DEBUG] Diff for {obj_type[:-1]}: {name}")
+                            file_lines = _normalize_newlines(file_def).splitlines()
+                            db_lines = _normalize_newlines(db_def).splitlines()
+                            for line in difflib.unified_diff(file_lines, db_lines, fromfile='file', tofile='db', lineterm=''):
+                                print(line)
 
             # Find objects to drop (in files but not in DB)
             for name, _ in file_objs.items():
@@ -193,6 +203,7 @@ def main(argv=None) -> int:
     parser.add_argument('--schema-name', help='Schema name (e.g., dbo). Overrides config.migrate.schema_name or top-level schema/schema_name')
     parser.add_argument('--sql-schema-dir', help='Local schema root directory. Overrides config.migrate.sql_schema_dir or top-level sql_schema_dir')
     parser.add_argument('--migrations-dir', help='Output migrations directory. Overrides config.migrate.migrations_dir or top-level migrations_dir')
+    parser.add_argument('--debug-diff', type=int, default=0, help='Print unified diffs for first N mismatches')
     args = parser.parse_args(argv)
 
     if not os.path.exists(args.config):
@@ -227,7 +238,8 @@ def main(argv=None) -> int:
     generate_migration(config=config,
                        sql_schema_dir=sql_schema_dir,
                        migrations_dir=migrations_dir,
-                       schema_name=schema_name)
+                       schema_name=schema_name,
+                       debug_diff=args.debug_diff)
     return 0
 
 
