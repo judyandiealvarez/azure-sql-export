@@ -63,15 +63,17 @@ def test_object(config, object_name: str, schema_name: str, hex_output: bool = F
                     print("Definition (hex):")
                     print(definition)
                     print("Hex breakdown:")
+                    hex_chars = []
                     for char in definition:
                         if char == '\n':
-                            print(f"\\n (0x{ord(char):02x})")
+                            hex_chars.append(f"\\n (0x{ord(char):02x})")
                         elif char == '\r':
-                            print(f"\\r (0x{ord(char):02x})")
+                            hex_chars.append(f"\\r (0x{ord(char):02x})")
                         elif char == '\t':
-                            print(f"\\t (0x{ord(char):02x})")
+                            hex_chars.append(f"\\t (0x{ord(char):02x})")
                         else:
-                            print(f"{char} (0x{ord(char):02x})")
+                            hex_chars.append(f"{char} (0x{ord(char):02x})")
+                    print(" ".join(hex_chars))
                 else:
                     print("Definition:")
                     print(definition)
