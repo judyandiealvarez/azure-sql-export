@@ -100,7 +100,7 @@ def norm(s):
     return '\n'.join(line.rstrip() for line in s.replace('\r\n', '\n').replace('\r', '\n').split('\n')).strip()
 
 
-def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str, debug_diff: int = 0):
+def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str, debug_diff: int = 0, only_object: str | None = None):
     conn_str = _build_conn_str(config)
     migration_sql: List[str] = []
     # Summary buckets
@@ -128,18 +128,16 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                 else:
                     if norm(file_def) != norm(db_def):
                         print(f"[MIGRATION] {obj_type} '{name}' differs between DB and file. Will UPDATE.")
-                        if debug_shown < debug_diff:
+                        if debug_shown < debug_diff and (only_object is None or only_object == name):
                             debug_shown += 1
-                            print('--- FILE DEF ---')
+                            print('--- FILE DEF (raw) ---')
                             print(file_def)
-                            print('--- DB DEF ---')
+                            print('--- DB DEF (raw) ---')
                             print(db_def)
-                            import difflib
-                            diff = difflib.unified_diff(
-                                file_def.splitlines(), db_def.splitlines(),
-                                fromfile='file', tofile='db', lineterm='')
-                            print('--- UNIFIED DIFF ---')
-                            print('\n'.join(list(diff)))
+                            print('--- FILE DEF (repr) ---')
+                            print(repr(file_def))
+                            print('--- DB DEF (repr) ---')
+                            print(repr(db_def))
                         updated[obj_type].append(name)
                         migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
 
@@ -205,6 +203,7 @@ def main(argv=None) -> int:
     parser.add_argument('--sql-schema-dir', help='Local schema root directory. Overrides config.migrate.sql_schema_dir or top-level sql_schema_dir')
     parser.add_argument('--migrations-dir', help='Output migrations directory. Overrides config.migrate.migrations_dir or top-level migrations_dir')
     parser.add_argument('--debug-diff', type=int, default=0, help='Print file and DB content for first N mismatches')
+    parser.add_argument('--only-object', help='Object name to focus debug output on (exact name)')
     args = parser.parse_args(argv)
 
     if not os.path.exists(args.config):
@@ -240,7 +239,8 @@ def main(argv=None) -> int:
                        sql_schema_dir=sql_schema_dir,
                        migrations_dir=migrations_dir,
                        schema_name=schema_name,
-                       debug_diff=args.debug_diff)
+                       debug_diff=args.debug_diff,
+                       only_object=args.only_object)
     return 0
 
 
