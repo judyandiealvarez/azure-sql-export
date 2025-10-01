@@ -66,8 +66,6 @@ def get_file_objects(folder: str):
     return result
 
 
-def norm(s):
-    return '\n'.join(line.rstrip() for line in s.replace('\r\n', '\n').replace('\r', '\n').split('\n')).strip()
 
 
 def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str, debug_diff: int = 0, only_object: str | None = None):
@@ -97,7 +95,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                     created[obj_type].append(name)
                     migration_sql.append(f"-- Create {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
                 else:
-                    if norm(file_def) != norm(db_def):
+                    if file_def != db_def:
                         print(f"[MIGRATION] {obj_type} '{name}' differs between DB and file. Will UPDATE.")
                         if debug_shown < debug_diff and (only_object is None or only_object == name):
                             debug_shown += 1
