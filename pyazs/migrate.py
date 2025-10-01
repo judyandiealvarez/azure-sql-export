@@ -126,8 +126,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
         cursor = conn.cursor()
         for obj_type in OBJECT_QUERIES:
             db_objs = get_db_objects(cursor, obj_type, schema_name)
-            folder_name = obj_type if obj_type != 'StoredProcedures' else 'Stored Procedures'
-            folder = os.path.join(sql_schema_dir, folder_name)
+            folder = os.path.join(sql_schema_dir, obj_type.replace(' ', ''))
             file_objs = get_file_objects(folder)
 
             # Find objects to create or alter
