@@ -41,3 +41,9 @@ def get_db_objects(cursor, obj_type: str, schema_name: str) -> Dict[str, str]:
     """Extract object definitions from database for given object type and schema."""
     cursor.execute(OBJECT_QUERIES[obj_type], schema_name)
     return {row.name: row.definition for row in cursor.fetchall() if row.definition}
+
+
+def write_definition_to_file(definition: str, output_file: str) -> None:
+    """Write definition to file preserving exact newlines."""
+    with open(output_file, 'w', encoding='utf-8', newline='') as f:
+        f.write(definition)

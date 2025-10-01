@@ -5,9 +5,9 @@ import yaml
 import argparse
 import pyodbc
 try:
-    from .common import get_db_objects, OBJECT_QUERIES
+    from .common import get_db_objects, OBJECT_QUERIES, write_definition_to_file
 except ImportError:
-    from common import get_db_objects, OBJECT_QUERIES
+    from common import get_db_objects, OBJECT_QUERIES, write_definition_to_file
 
 
 def _load_config(config_path: str):
@@ -60,8 +60,7 @@ def test_object(config, object_name: str, schema_name: str, hex_output: bool = F
                 print(f"Found {obj_type[:-1]}: {object_name}")
                 
                 if output_file:
-                    with open(output_file, 'w', encoding='utf-8', newline='') as f:
-                        f.write(definition)
+                    write_definition_to_file(definition, output_file)
                     print(f"Definition written to: {output_file}")
                 else:
                     if hex_output:
