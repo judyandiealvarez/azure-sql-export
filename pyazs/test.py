@@ -60,7 +60,7 @@ def test_object(config, object_name: str, schema_name: str, hex_output: bool = F
                 print(f"Found {obj_type[:-1]}: {object_name}")
                 
                 if output_file:
-                    with open(output_file, 'w', encoding='utf-8') as f:
+                    with open(output_file, 'w', encoding='utf-8', newline='') as f:
                         f.write(definition)
                     print(f"Definition written to: {output_file}")
                 else:
