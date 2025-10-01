@@ -8,7 +8,6 @@ import pyodbc
 from datetime import datetime
 from typing import Dict, List, DefaultDict
 from collections import defaultdict
-import re
 
 OBJECT_QUERIES = {
     'Tables': """
@@ -97,29 +96,14 @@ def get_file_objects(folder: str):
     return result
 
 
-_COMMENT_LINE = re.compile(r"--.*?$", re.MULTILINE)
-_COMMENT_BLOCK = re.compile(r"/\*.*?\*/", re.DOTALL)
-_SET_LINES = re.compile(r"^\s*SET\s+(ANSI_NULLS|QUOTED_IDENTIFIER)\s+(ON|OFF)\s*;?\s*$", re.IGNORECASE | re.MULTILINE)
-_GO_LINES = re.compile(r"^\s*GO\s*$", re.IGNORECASE | re.MULTILINE)
-_WHITESPACE = re.compile(r"\s+")
-
-
-def _normalize_sql(sql: str) -> str:
-    if not sql:
+def _normalize_newlines(sql: str) -> str:
+    if sql is None:
         return ""
-    s = sql
-    s = _COMMENT_BLOCK.sub(" ", s)
-    s = _COMMENT_LINE.sub(" ", s)
-    s = _SET_LINES.sub(" ", s)
-    s = _GO_LINES.sub(" ", s)
-    # Collapse whitespace and lowercase for stable comparison
-    s = _WHITESPACE.sub(" ", s)
-    s = s.strip().lower()
-    return s
+    return sql.replace('\r\n', '\n').replace('\r', '\n')
 
 
 def _same_definition(file_def: str, db_def: str) -> bool:
-    return _normalize_sql(file_def) == _normalize_sql(db_def)
+    return _normalize_newlines(file_def) == _normalize_newlines(db_def)
 
 
 def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str):
