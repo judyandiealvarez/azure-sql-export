@@ -8,7 +8,45 @@ import pyodbc
 from datetime import datetime
 from typing import Dict, List, DefaultDict
 from collections import defaultdict
-from .db import get_db_objects, OBJECT_QUERIES
+
+OBJECT_QUERIES = {
+    'Tables': """
+        SELECT t.name, OBJECT_DEFINITION(t.object_id) AS definition
+        FROM sys.tables t
+        JOIN sys.schemas s ON t.schema_id = s.schema_id
+        WHERE s.name = ?
+    """,
+    'Views': """
+        SELECT v.name, OBJECT_DEFINITION(v.object_id) AS definition
+        FROM sys.views v
+        JOIN sys.schemas s ON v.schema_id = s.schema_id
+        WHERE s.name = ?
+    """,
+    'StoredProcedures': """
+        SELECT p.name, OBJECT_DEFINITION(p.object_id) AS definition
+        FROM sys.procedures p
+        JOIN sys.schemas s ON p.schema_id = s.schema_id
+        WHERE s.name = ?
+    """,
+    'Functions': """
+        SELECT f.name, OBJECT_DEFINITION(f.object_id) AS definition
+        FROM sys.objects f
+        JOIN sys.schemas s ON f.schema_id = s.schema_id
+        WHERE s.name = ? AND f.type IN ('FN','TF','IF')
+    """,
+    'Triggers': """
+        SELECT tr.name, OBJECT_DEFINITION(tr.object_id) AS definition
+        FROM sys.triggers tr
+        JOIN sys.objects o ON tr.parent_id = o.object_id
+        JOIN sys.schemas s ON o.schema_id = s.schema_id
+        WHERE s.name = ?
+    """
+}
+
+
+def get_db_objects(cursor, obj_type: str, schema_name: str):
+    cursor.execute(OBJECT_QUERIES[obj_type], schema_name)
+    return {row.name: row.definition for row in cursor.fetchall() if row.definition}
 
 
 def _load_config(config_path: str) -> Dict:
