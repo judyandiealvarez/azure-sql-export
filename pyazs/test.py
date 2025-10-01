@@ -5,9 +5,9 @@ import yaml
 import argparse
 import pyodbc
 try:
-    from .common import get_db_objects, OBJECT_QUERIES
+    from .sync import get_db_objects, OBJECT_QUERIES
 except ImportError:
-    from common import get_db_objects, OBJECT_QUERIES
+    from sync import get_db_objects, OBJECT_QUERIES
 
 
 def _load_config(config_path: str):
