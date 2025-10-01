@@ -70,9 +70,16 @@ def sync_schema_objects(config: Dict, sql_schema_dir: str, schema_name: str):
             # Create or update
             for name, definition in db_objs.items():
                 path = os.path.join(folder, f'{name}.sql')
-                if name not in local_objs or open(path, encoding='utf-8').read() != definition:
+                if name not in local_objs:
                     write_definition_to_file(definition, path)
                     print(f'Created/Updated: {path}')
+                else:
+                    # Read existing file with same newline handling as migrate
+                    with open(path, encoding='utf-8', newline='') as f:
+                        existing_content = f.read()
+                    if existing_content != definition:
+                        write_definition_to_file(definition, path)
+                        print(f'Created/Updated: {path}')
 
             # Remove non-existing
             for name, path in local_objs.items():
