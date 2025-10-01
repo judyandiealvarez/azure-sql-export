@@ -12,34 +12,39 @@ import difflib
 
 OBJECT_QUERIES = {
     'Tables': """
-        SELECT t.name, OBJECT_DEFINITION(t.object_id) AS definition
+        SELECT t.name, m.definition
         FROM sys.tables t
         JOIN sys.schemas s ON t.schema_id = s.schema_id
+        CROSS APPLY (SELECT OBJECT_DEFINITION(t.object_id) AS definition) m
         WHERE s.name = ?
     """,
     'Views': """
-        SELECT v.name, OBJECT_DEFINITION(v.object_id) AS definition
+        SELECT v.name, m.definition
         FROM sys.views v
         JOIN sys.schemas s ON v.schema_id = s.schema_id
+        CROSS APPLY (SELECT OBJECT_DEFINITION(v.object_id) AS definition) m
         WHERE s.name = ?
     """,
     'StoredProcedures': """
-        SELECT p.name, OBJECT_DEFINITION(p.object_id) AS definition
+        SELECT p.name, m.definition
         FROM sys.procedures p
         JOIN sys.schemas s ON p.schema_id = s.schema_id
+        CROSS APPLY (SELECT OBJECT_DEFINITION(p.object_id) AS definition) m
         WHERE s.name = ?
     """,
     'Functions': """
-        SELECT f.name, OBJECT_DEFINITION(f.object_id) AS definition
+        SELECT f.name, m.definition
         FROM sys.objects f
         JOIN sys.schemas s ON f.schema_id = s.schema_id
+        CROSS APPLY (SELECT OBJECT_DEFINITION(f.object_id) AS definition) m
         WHERE s.name = ? AND f.type IN ('FN','TF','IF')
     """,
     'Triggers': """
-        SELECT tr.name, OBJECT_DEFINITION(tr.object_id) AS definition
+        SELECT tr.name, m.definition
         FROM sys.triggers tr
         JOIN sys.objects o ON tr.parent_id = o.object_id
         JOIN sys.schemas s ON o.schema_id = s.schema_id
+        CROSS APPLY (SELECT OBJECT_DEFINITION(tr.object_id) AS definition) m
         WHERE s.name = ?
     """
 }
