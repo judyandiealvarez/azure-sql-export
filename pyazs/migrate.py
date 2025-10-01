@@ -141,11 +141,12 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                         migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
                         if debug_shown < debug_diff:
                             debug_shown += 1
-                            print(f"[DEBUG] Diff for {obj_type[:-1]}: {name}")
-                            file_lines = _normalize_newlines(file_def).splitlines()
-                            db_lines = _normalize_newlines(db_def).splitlines()
-                            for line in difflib.unified_diff(file_lines, db_lines, fromfile='file', tofile='db', lineterm=''):
-                                print(line)
+                            print(f"\n[DEBUG] {obj_type[:-1]}: {name}")
+                            print("FILE CONTENT:")
+                            print(file_def)
+                            print("\nDB CONTENT:")
+                            print(db_def)
+                            print("=" * 50)
 
             # Find objects to drop (in files but not in DB)
             for name, _ in file_objs.items():
