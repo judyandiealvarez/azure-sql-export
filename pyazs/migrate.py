@@ -119,6 +119,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
             file_objs = get_file_objects(folder)
 
             # Find objects to create or alter (bring files up to DB state)
+            print(f"[DEBUG] Processing {obj_type}: {list(db_objs.keys())}")
             for name, db_def in db_objs.items():
                 file_def = file_objs.get(name)
                 if file_def is None:
