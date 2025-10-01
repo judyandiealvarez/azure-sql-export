@@ -64,7 +64,8 @@ def sync_schema_objects(config: Dict, sql_schema_dir: str, schema_name: str):
         for obj_type in OBJECT_QUERIES:
             print(f'Processing {obj_type}...')
             db_objs = get_db_objects(cursor, obj_type, schema_name)
-            folder = os.path.join(sql_schema_dir, obj_type.replace(' ', ''))
+            folder_name = obj_type if obj_type != 'StoredProcedures' else 'Stored Procedures'
+            folder = os.path.join(sql_schema_dir, folder_name)
             local_objs = get_local_objects(folder)
 
             # Create or update
