@@ -45,7 +45,7 @@ OBJECT_QUERIES = {
 
 
 def _load_config(config_path: str) -> Dict:
-    with open(config_path, 'r', encoding='utf-8') as f:
+    with open(config_path, 'r', encoding='utf-8', newline='') as f:
         if config_path.endswith(('.yaml', '.yml')):
             return yaml.safe_load(f)
         return json.load(f)
@@ -91,7 +91,7 @@ def get_file_objects(folder: str):
     result = {}
     for f in os.listdir(folder):
         if f.endswith('.sql'):
-            with open(os.path.join(folder, f), encoding='utf-8') as file:
+            with open(os.path.join(folder, f), encoding='utf-8', newline='') as file:
                 result[os.path.splitext(f)[0]] = file.read()
     return result
 
@@ -166,7 +166,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
         next_num = max(nums, default=0) + 1
         filename = f"update{next_num:04d}.sql"
         outfile = os.path.join(migrations_dir, filename)
-        with open(outfile, 'w', encoding='utf-8') as f:
+        with open(outfile, 'w', encoding='utf-8', newline='') as f:
             # Counts table
             f.write('-- Summary\n')
             f.write(f"-- Schema: {schema_name}\n")
