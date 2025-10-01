@@ -139,10 +139,12 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
             for db_name_lower, db_def in db_objs.items():
                 file_def = file_objs.get(db_name_lower)
                 if file_def is None:
+                    print(f"[MIGRATE] {obj_type[:-1]} '{db_name_lower}' exists in DB but not in files. Will CREATE.")
                     created[obj_type].append(db_name_lower)
                     migration_sql.append(f"-- Create {obj_type[:-1]}: {db_name_lower}\n{db_def}\nGO\n")
                 else:
                     if not _same_definition(file_def, db_def):
+                        print(f"[MIGRATE] {obj_type[:-1]} '{db_name_lower}' differs between DB and file. Will UPDATE.")
                         updated[obj_type].append(db_name_lower)
                         migration_sql.append(f"-- Update {obj_type[:-1]}: {db_name_lower}\n{db_def}\nGO\n")
                         if debug_shown < debug_diff:
@@ -153,6 +155,8 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                             print("\nDB CONTENT:")
                             print(db_def)
                             print("=" * 50)
+                    else:
+                        print(f"[MIGRATE] {obj_type[:-1]} '{db_name_lower}' is identical. Skipping.")
 
             # Find objects to drop (in files but not in DB)
             for file_name_lower, _ in file_objs.items():
