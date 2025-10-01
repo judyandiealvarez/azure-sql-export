@@ -73,7 +73,7 @@ def test_object(config, object_name: str, schema_name: str, hex_output: bool = F
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description='Test object extraction by name')
     parser.add_argument('-c', '--config', default='config.yaml', help='Path to YAML/JSON config (default: config.yaml)')
-    parser.add_argument('--schema-name', help='Schema name (e.g., dbo). Overrides config.test.schema_name or top-level schema/schema_name')
+    parser.add_argument('--schema-name', help='Schema name (e.g., dbo). Overrides config.schema_name or top-level schema')
     parser.add_argument('--hex', action='store_true', help='Output definition in hex format')
     parser.add_argument('object_name', help='Name of the object to find')
     args = parser.parse_args(argv)
@@ -82,16 +82,13 @@ def main(argv=None) -> int:
         raise SystemExit(f"Config file not found: {args.config}")
     config = _load_config(args.config)
 
-    test_cfg = (config.get('test') or {}) if isinstance(config, dict) else {}
-
     schema_name = (
         args.schema_name or
-        test_cfg.get('schema_name') or
         config.get('schema_name') or
         config.get('schema')
     )
     if not schema_name:
-        raise SystemExit('schema_name must be provided via --schema-name or config (test.schema_name or top-level schema/schema_name)')
+        raise SystemExit('schema_name must be provided via --schema-name or config (schema_name or schema)')
 
     test_object(config=config,
                 object_name=args.object_name,
