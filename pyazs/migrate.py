@@ -87,17 +87,24 @@ def _build_conn_str(config: Dict) -> str:
 
 def get_db_objects(cursor, obj_type: str, schema_name: str):
     cursor.execute(OBJECT_QUERIES[obj_type], schema_name)
-    return {row.name: row.definition for row in cursor.fetchall() if row.definition}
+    # Normalize keys to lowercase for case-insensitive matching
+    return {row.name.lower(): row.definition for row in cursor.fetchall() if row.definition}
 
 
 def get_file_objects(folder: str):
     if not os.path.exists(folder):
         return {}
-    result = {}
+    result: Dict[str, str] = {}
     for f in os.listdir(folder):
-        if f.endswith('.sql'):
-            with open(os.path.join(folder, f), encoding='utf-8') as file:
-                result[os.path.splitext(f)[0]] = file.read()
+        if not f.endswith('.sql'):
+            continue
+        path = os.path.join(folder, f)
+        with open(path, encoding='utf-8') as file:
+            content = file.read()
+        stem = os.path.splitext(f)[0]
+        # Allow filenames like "dbo.MyProc" or just "MyProc"; match key on object name only
+        name_only = stem.split('.')[-1].lower()
+        result[name_only] = content
     return result
 
 
@@ -129,18 +136,18 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
             file_objs = get_file_objects(folder)
 
             # Find objects to create or alter
-            for name, db_def in db_objs.items():
-                file_def = file_objs.get(name)
+            for db_name_lower, db_def in db_objs.items():
+                file_def = file_objs.get(db_name_lower)
                 if file_def is None:
-                    created[obj_type].append(name)
-                    migration_sql.append(f"-- Create {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
+                    created[obj_type].append(db_name_lower)
+                    migration_sql.append(f"-- Create {obj_type[:-1]}: {db_name_lower}\n{db_def}\nGO\n")
                 else:
                     if not _same_definition(file_def, db_def):
-                        updated[obj_type].append(name)
-                        migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
+                        updated[obj_type].append(db_name_lower)
+                        migration_sql.append(f"-- Update {obj_type[:-1]}: {db_name_lower}\n{db_def}\nGO\n")
                         if debug_shown < debug_diff:
                             debug_shown += 1
-                            print(f"\n[DEBUG] {obj_type[:-1]}: {name}")
+                            print(f"\n[DEBUG] {obj_type[:-1]}: {db_name_lower}")
                             print("FILE CONTENT:")
                             print(file_def)
                             print("\nDB CONTENT:")
@@ -148,19 +155,19 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                             print("=" * 50)
 
             # Find objects to drop (in files but not in DB)
-            for name, _ in file_objs.items():
-                if name not in db_objs:
-                    dropped[obj_type].append(name)
+            for file_name_lower, _ in file_objs.items():
+                if file_name_lower not in db_objs:
+                    dropped[obj_type].append(file_name_lower)
                     if obj_type == 'Tables':
-                        migration_sql.append(f"DROP TABLE [{schema_name}].[{name}];\n")
+                        migration_sql.append(f"DROP TABLE [{schema_name}].[{file_name_lower}];\n")
                     elif obj_type == 'Views':
-                        migration_sql.append(f"DROP VIEW [{schema_name}].[{name}];\n")
+                        migration_sql.append(f"DROP VIEW [{schema_name}].[{file_name_lower}];\n")
                     elif obj_type == 'StoredProcedures':
-                        migration_sql.append(f"DROP PROCEDURE [{schema_name}].[{name}];\n")
+                        migration_sql.append(f"DROP PROCEDURE [{schema_name}].[{file_name_lower}];\n")
                     elif obj_type == 'Functions':
-                        migration_sql.append(f"DROP FUNCTION [{schema_name}].[{name}];\n")
+                        migration_sql.append(f"DROP FUNCTION [{schema_name}].[{file_name_lower}];\n")
                     elif obj_type == 'Triggers':
-                        migration_sql.append(f"DROP TRIGGER [{schema_name}].[{name}];\n")
+                        migration_sql.append(f"DROP TRIGGER [{schema_name}].[{file_name_lower}];\n")
 
     if migration_sql:
         os.makedirs(migrations_dir, exist_ok=True)
@@ -207,7 +214,7 @@ def main(argv=None) -> int:
     parser.add_argument('--schema-name', help='Schema name (e.g., dbo). Overrides config.migrate.schema_name or top-level schema/schema_name')
     parser.add_argument('--sql-schema-dir', help='Local schema root directory. Overrides config.migrate.sql_schema_dir or top-level sql_schema_dir')
     parser.add_argument('--migrations-dir', help='Output migrations directory. Overrides config.migrate.migrations_dir or top-level migrations_dir')
-    parser.add_argument('--debug-diff', type=int, default=0, help='Print unified diffs for first N mismatches')
+    parser.add_argument('--debug-diff', type=int, default=0, help='Print file and DB content for first N mismatches')
     args = parser.parse_args(argv)
 
     if not os.path.exists(args.config):
