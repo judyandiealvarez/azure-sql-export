@@ -11,6 +11,7 @@ COMMANDS = {
     "web": "pyazs.web",
     "migrate": "pyazs.migrate",
     "sync": "pyazs.sync",
+    "test": "pyazs.test",
 }
 
 
@@ -31,6 +32,7 @@ def _print_usage() -> None:
                 "  web       Launch the web UI for export/import/compare",
                 "  sync      Sync DB objects to local .sql files for a schema",
                 "  migrate   Generate migration script from DB vs local files",
+                "  test      Test object extraction by name",
             ]
         )
     )
