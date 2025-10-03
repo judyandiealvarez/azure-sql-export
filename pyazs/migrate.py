@@ -35,7 +35,9 @@ def _build_conn_str(config: Dict) -> str:
             "DRIVER={" + driver + "};" +
             "SERVER=" + server + ";" +
             "DATABASE=" + database + ";" +
-            "Authentication=ActiveDirectoryDefault;"
+            "Authentication=ActiveDirectoryDefault;" +
+            "Encrypt=yes;" +
+            "TrustServerCertificate=yes;"
         )
 
     username = config.get('username') or config.get('user') or config.get('uid')
@@ -49,7 +51,9 @@ def _build_conn_str(config: Dict) -> str:
         "PORT=1433;" +
         "DATABASE=" + database + ";" +
         "UID=" + str(username) + ";" +
-        "PWD=" + str(password)
+        "PWD=" + str(password) + ";" +
+        "Encrypt=yes;" +
+        "TrustServerCertificate=yes;"
     )
 
 
