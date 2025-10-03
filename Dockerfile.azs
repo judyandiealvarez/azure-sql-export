@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      curl gnupg ca-certificates apt-transport-https unixodbc unixodbc-dev && \
+    echo 'deb [arch=amd64,arm64] https://packages.microsoft.com/debian/12/prod bookworm main' > /etc/apt/sources.list.d/mssql-release.list && \
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/microsoft.gpg && \
+    apt-get update && \
+    ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+RUN python -m pip install -U pip && python -m pip install -r requirements.txt
+
+# We'll mount the project at /work and run modules there
+WORKDIR /work
+ENTRYPOINT ["python", "-m"]
+
+
