@@ -16,6 +16,7 @@ if [ $# -lt 1 ]; then
 fi
 
 CMD="$1"; shift || true
+DO_ARGS="$*"
 
 # Use Debian-based Python image and install msodbcsql18 and python deps
 docker run --rm -t \
@@ -31,7 +32,7 @@ docker run --rm -t \
     ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18; \
     python -m pip install -U pip; \
     python -m pip install -r requirements.txt; \
-    python -m pyazs.${CMD} "$@"\
+    python -m pyazs.${CMD} ${DO_ARGS}\
   "
 
 echo "[azs-docker] Done. Outputs are in your local working directory (bind-mounted)."
