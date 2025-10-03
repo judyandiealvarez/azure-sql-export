@@ -71,16 +71,23 @@ def sync_schema_objects():
         for obj_type in OBJECT_QUERIES:
             print(f'Processing {obj_type}...')
             db_objs = get_db_objects(cursor, obj_type)
-            folder = os.path.join(SQL_SCHEMA_DIR, obj_type.replace(" ", ""))
+            folder = os.path.join(SQL_SCHEMA_DIR, obj_type)
             local_objs = get_local_objects(folder)
 
             # Create or update
             for name, definition in db_objs.items():
                 path = os.path.join(folder, f'{name}.sql')
-                if name not in local_objs or open(path, encoding="utf-8").read() != definition:
-                    with open(path, 'w', encoding="utf-8") as f:
+                if name not in local_objs:
+                    with open(path, 'w', encoding="utf-8", newline='') as f:
                         f.write(definition)
                     print(f'Created/Updated: {path}')
+                else:
+                    with open(path, encoding='utf-8', newline='') as f:
+                        existing = f.read()
+                    if existing != definition:
+                        with open(path, 'w', encoding="utf-8", newline='') as f:
+                            f.write(definition)
+                        print(f'Created/Updated: {path}')
 
             # Remove non-existing
             for name, path in local_objs.items():
