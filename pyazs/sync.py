@@ -31,7 +31,9 @@ def _build_conn_str(config: Dict) -> str:
             "DRIVER={" + driver + "};" +
             "SERVER=" + server + ";" +
             "DATABASE=" + database + ";" +
-            "Authentication=ActiveDirectoryDefault;"
+            "Authentication=ActiveDirectoryDefault;" +
+            "Encrypt=yes;" +
+            "TrustServerCertificate=yes;"
         )
 
     username = config.get('username') or config.get('user') or config.get('uid')
@@ -44,7 +46,9 @@ def _build_conn_str(config: Dict) -> str:
         "SERVER=" + server + ";" +
         "DATABASE=" + database + ";" +
         "UID=" + str(username) + ";" +
-        "PWD=" + str(password)
+        "PWD=" + str(password) + ";" +
+        "Encrypt=yes;" +
+        "TrustServerCertificate=yes;"
     )
 
 
@@ -64,23 +68,15 @@ def sync_schema_objects(config: Dict, sql_schema_dir: str, schema_name: str):
         for obj_type in OBJECT_QUERIES:
             print(f'Processing {obj_type}...')
             db_objs = get_db_objects(cursor, obj_type, schema_name)
-            folder_name = obj_type if obj_type != 'StoredProcedures' else 'Stored Procedures'
-            folder = os.path.join(sql_schema_dir, folder_name)
+            folder = os.path.join(sql_schema_dir, obj_type.replace(' ', ''))
             local_objs = get_local_objects(folder)
 
             # Create or update
             for name, definition in db_objs.items():
                 path = os.path.join(folder, f'{name}.sql')
-                if name not in local_objs:
+                if name not in local_objs or open(path, encoding='utf-8').read() != definition:
                     write_definition_to_file(definition, path)
                     print(f'Created/Updated: {path}')
-                else:
-                    # Read existing file with same newline handling as migrate
-                    with open(path, encoding='utf-8', newline='') as f:
-                        existing_content = f.read()
-                    if existing_content != definition:
-                        write_definition_to_file(definition, path)
-                        print(f'Created/Updated: {path}')
 
             # Remove non-existing
             for name, path in local_objs.items():
