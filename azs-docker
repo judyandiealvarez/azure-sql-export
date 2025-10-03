@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# azs-docker: run azs commands inside Docker with msodbcsql18 installed
+# Usage: ./azs-docker <command> [args]
+# Example: ./azs-docker sync -c config.yaml
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "[azs-docker] docker not found in PATH" >&2
+  exit 127
+fi
+
+if [ $# -lt 1 ]; then
+  echo "usage: ./azs-docker <command> [args]" >&2
+  exit 2
+fi
+
+CMD="$1"; shift || true
+
+# Use Debian-based Python image and install msodbcsql18 and python deps
+docker run --rm -t \
+  -v "$PWD":/work \
+  -w /work \
+  python:3.11-slim bash -lc "\
+    set -euo pipefail; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl gnupg ca-certificates apt-transport-https unixodbc unixodbc-dev; \
+    echo 'deb [arch=amd64,arm64] https://packages.microsoft.com/debian/12/prod bookworm main' > /etc/apt/sources.list.d/mssql-release.list; \
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/microsoft.gpg; \
+    apt-get update; \
+    ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18; \
+    python -m pip install -U pip; \
+    python -m pip install -r requirements.txt; \
+    python -m pyazs.${CMD} "$@"\
+  "
+
+echo "[azs-docker] Done. Outputs are in your local working directory (bind-mounted)."
+
+
