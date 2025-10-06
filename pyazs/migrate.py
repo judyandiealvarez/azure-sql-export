@@ -137,7 +137,10 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                             print('--- DB slice ---')
                             print(repr(db_def[start:end_d]))
                         updated[obj_type].append(name)
-                        migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{_definition_for_update(obj_type, db_def)}\nGO\n")
+                        # Update DB to match local files: use file definition (header converted to ALTER)
+                        migration_sql.append(
+                            f"-- Update {obj_type[:-1]}: {name}\n{_definition_for_update(obj_type, file_def)}\nGO\n"
+                        )
 
             # Find objects to drop (in files but not in DB)
             for name, file_def in file_objs.items():
