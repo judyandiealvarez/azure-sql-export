@@ -1,6 +1,6 @@
 
 -- =============================================
--- Author:      <Author, , Name>
+-- Author:      Judy Alvarez
 -- Create Date: <Create Date, , >
 -- Description: <Description, , >
 -- =============================================

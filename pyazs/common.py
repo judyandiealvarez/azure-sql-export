@@ -36,17 +36,20 @@ OBJECT_QUERIES = {
 }
 
 
-def get_db_objects(cursor, obj_type: str, schema_name: str) -> Dict[str, str]:
-    """Extract object definitions from database for given object type and schema."""
+def get_db_objects(cursor, obj_type: str, schema_name: str, include_null: bool = False) -> Dict[str, str | None]:
+    """Extract object definitions from database for given object type and schema.
+    When include_null is True, include entries where definition is NULL (e.g., encrypted objects).
+    """
     cursor.execute(OBJECT_QUERIES[obj_type], (schema_name,))
     rows = cursor.fetchall()
-    result: Dict[str, str] = {}
+    result: Dict[str, str | None] = {}
     for row in rows:
         # pytds returns tuples by default: (name, definition)
         name = row[0]
         definition = row[1]
-        if definition:
-            result[name] = definition
+        if definition is None and not include_null:
+            continue
+        result[name] = definition
     return result
 
 

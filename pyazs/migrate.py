@@ -71,7 +71,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
     with pytds.connect(**params) as conn:
         cursor = conn.cursor()
         for obj_type in OBJECT_QUERIES:
-            db_objs = get_db_objects(cursor, obj_type, schema_name)
+            db_objs = get_db_objects(cursor, obj_type, schema_name, include_null=True)
             folder_name = obj_type if obj_type != 'StoredProcedures' else 'Stored Procedures'
             folder = os.path.join(sql_schema_dir, folder_name)
             file_objs = get_file_objects(folder)
@@ -81,11 +81,19 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
             for name, db_def in db_objs.items():
                 file_def = file_objs.get(name)
                 if file_def is None:
-                    print(f"[MIGRATION] {obj_type} '{name}' exists in DB but not in files. Will CREATE.")
-                    created[obj_type].append(name)
-                    migration_sql.append(f"-- Create {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
+                    if db_def is None:
+                        print(f"[MIGRATION] {obj_type} '{name}' exists in DB but definition is unavailable (possibly WITH ENCRYPTION). Skipping SQL; report only.")
+                        created[obj_type].append(name + " (definition unavailable)")
+                        # Do not append SQL body when definition is NULL
+                    else:
+                        print(f"[MIGRATION] {obj_type} '{name}' exists in DB but not in files. Will CREATE.")
+                        created[obj_type].append(name)
+                        migration_sql.append(f"-- Create {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
                 else:
-                    if file_def != db_def:
+                    if db_def is None:
+                        # Cannot compare; report and skip SQL body
+                        print(f"[MIGRATION] {obj_type} '{name}' definition unavailable in DB (possibly WITH ENCRYPTION). Skipping UPDATE.")
+                    elif file_def != db_def:
                         print(f"[MIGRATION] {obj_type} '{name}' differs between DB and file. Will UPDATE.")
                         if debug_shown < debug_diff and (only_object is None or only_object == name):
                             debug_shown += 1
