@@ -39,7 +39,8 @@ def _definition_for_update(obj_type: str, definition: str) -> str:
     Tables are left as-is (table diffs not auto-altered here).
     """
     if obj_type in ("Views", "StoredProcedures", "Functions", "Triggers"):
-        return re.sub(r"^(\s*)CREATE(\s+)", r"\1CREATE OR ALTER\2", definition, count=1, flags=re.IGNORECASE)
+        # Handle optional BOM and any leading whitespace/newlines, preserve spacing after CREATE
+        return re.sub(r"^\ufeff?(\s*)create(\s+)", r"\1CREATE OR ALTER\2", definition, count=1, flags=re.IGNORECASE)
     return definition
 
 
