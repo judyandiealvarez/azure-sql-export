@@ -11,7 +11,7 @@ requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [ { name = "Azuresqlfetch Maintainers" } ]
 dependencies = [
-  "pyodbc>=4.0.39",
+  "python-tds>=1.10.0",
   "pandas>=1.5.0",
   "PyYAML>=6.0",
   "Flask>=2.0.0",

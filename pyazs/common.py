@@ -1,4 +1,4 @@
-import pyodbc
+import python_tds
 from typing import Dict
 
 

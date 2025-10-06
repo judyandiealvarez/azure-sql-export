@@ -3,7 +3,7 @@ import sys
 import json
 import yaml
 import argparse
-import pyodbc
+import pytds
 try:
     from .common import get_db_objects, OBJECT_QUERIES, write_definition_to_file
 except ImportError:
@@ -17,39 +17,29 @@ def _load_config(config_path: str):
         return json.load(f)
 
 
-def _build_conn_str(config):
-    driver = config.get('driver', 'ODBC Driver 17 for SQL Server')
+def _build_conn_params(config):
     server = config['server']
     database = config['database']
-    auth_type = config.get('authentication_type', 'sql')
-
-    if auth_type == 'azure_ad':
-        return (
-            "DRIVER={" + driver + "};" +
-            "SERVER=" + server + ";" +
-            "DATABASE=" + database + ";" +
-            "Authentication=ActiveDirectoryDefault;"
-        )
-
     username = config.get('username') or config.get('user') or config.get('uid')
     password = config.get('password') or config.get('pwd')
     if not username or not password:
         raise SystemExit('Missing username/password for SQL authentication in config')
-
-    return (
-        "DRIVER={" + driver + "};" +
-        "SERVER=" + server + ";" +
-        "PORT=1433;" +
-        "DATABASE=" + database + ";" +
-        "UID=" + str(username) + ";" +
-        "PWD=" + str(password)
-    )
+    return {
+        'server': server,
+        'database': database,
+        'user': str(username),
+        'password': str(password),
+        'port': 1433,
+        'use_tds': 7.4,
+        'encrypt': True,
+        'trust_server_certificate': True,
+    }
 
 
 def test_object(config, object_name: str, schema_name: str, hex_output: bool = False, output_file: str = None):
-    conn_str = _build_conn_str(config)
+    params = _build_conn_params(config)
     
-    with pyodbc.connect(conn_str) as conn:
+    with pytds.connect(**params) as conn:
         cursor = conn.cursor()
         
         for obj_type in OBJECT_QUERIES:

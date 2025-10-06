@@ -4,7 +4,7 @@ import sys
 import json
 import yaml
 import argparse
-import pyodbc
+import pytds
 from datetime import datetime
 from typing import Dict, List, DefaultDict
 from collections import defaultdict
@@ -24,37 +24,23 @@ def _load_config(config_path: str) -> Dict:
         return json.load(f)
 
 
-def _build_conn_str(config: Dict) -> str:
-    driver = config.get('driver', 'ODBC Driver 17 for SQL Server')
+def _build_conn_params(config: Dict) -> Dict:
     server = config['server']
     database = config['database']
-    auth_type = config.get('authentication_type', 'sql')
-
-    if auth_type == 'azure_ad':
-        return (
-            "DRIVER={" + driver + "};" +
-            "SERVER=" + server + ";" +
-            "DATABASE=" + database + ";" +
-            "Authentication=ActiveDirectoryDefault;" +
-            "Encrypt=yes;" +
-            "TrustServerCertificate=yes;"
-        )
-
     username = config.get('username') or config.get('user') or config.get('uid')
     password = config.get('password') or config.get('pwd')
     if not username or not password:
         raise SystemExit('Missing username/password for SQL authentication in config')
-
-    return (
-        "DRIVER={" + driver + "};" +
-        "SERVER=" + server + ";" +
-        "PORT=1433;" +
-        "DATABASE=" + database + ";" +
-        "UID=" + str(username) + ";" +
-        "PWD=" + str(password) + ";" +
-        "Encrypt=yes;" +
-        "TrustServerCertificate=yes;"
-    )
+    return {
+        'server': server,
+        'database': database,
+        'user': str(username),
+        'password': str(password),
+        'port': 1433,
+        'use_tds': 7.4,
+        'encrypt': True,
+        'trust_server_certificate': True,
+    }
 
 
 
@@ -73,7 +59,7 @@ def get_file_objects(folder: str):
 
 
 def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, schema_name: str, debug_diff: int = 0, only_object: str | None = None):
-    conn_str = _build_conn_str(config)
+    params = _build_conn_params(config)
     migration_sql: List[str] = []
     # Summary buckets
     created: DefaultDict[str, List[str]] = defaultdict(list)
@@ -82,7 +68,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
 
     debug_shown = 0
 
-    with pyodbc.connect(conn_str) as conn:
+    with pytds.connect(**params) as conn:
         cursor = conn.cursor()
         for obj_type in OBJECT_QUERIES:
             db_objs = get_db_objects(cursor, obj_type, schema_name)

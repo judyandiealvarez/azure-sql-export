@@ -16,7 +16,7 @@ else
 fi
 
 # Ensure required deps are installed (best-effort), with venv fallback
-NEEDED_MODS="yaml pandas flask pyodbc sqlparse sqlglot werkzeug"
+NEEDED_MODS="yaml pandas flask pytds sqlparse sqlglot werkzeug"
 need_install=0
 for mod in $NEEDED_MODS; do
   "$PY" -c "import $mod" >/dev/null 2>&1 || { need_install=1; break; }

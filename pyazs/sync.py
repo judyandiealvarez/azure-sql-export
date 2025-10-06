@@ -4,7 +4,7 @@ import sys
 import json
 import yaml
 import argparse
-import pyodbc
+import python_tds
 from typing import Dict
 try:
     from .common import get_db_objects, OBJECT_QUERIES, write_definition_to_file
@@ -20,36 +20,24 @@ def _load_config(config_path: str) -> Dict:
         return json.load(f)
 
 
-def _build_conn_str(config: Dict) -> str:
-    driver = config.get('driver', 'ODBC Driver 17 for SQL Server')
+def _build_conn_params(config: Dict) -> Dict:
     server = config['server']
     database = config['database']
-    auth_type = config.get('authentication_type', 'sql')
-
-    if auth_type == 'azure_ad':
-        return (
-            "DRIVER={" + driver + "};" +
-            "SERVER=" + server + ";" +
-            "DATABASE=" + database + ";" +
-            "Authentication=ActiveDirectoryDefault;" +
-            "Encrypt=yes;" +
-            "TrustServerCertificate=yes;"
-        )
-
     username = config.get('username') or config.get('user') or config.get('uid')
     password = config.get('password') or config.get('pwd')
     if not username or not password:
         raise SystemExit('Missing username/password for SQL authentication in config')
-
-    return (
-        "DRIVER={" + driver + "};" +
-        "SERVER=" + server + ";" +
-        "DATABASE=" + database + ";" +
-        "UID=" + str(username) + ";" +
-        "PWD=" + str(password) + ";" +
-        "Encrypt=yes;" +
-        "TrustServerCertificate=yes;"
-    )
+    return {
+        'server': server,
+        'database': database,
+        'user': str(username),
+        'password': str(password),
+        'port': 1433,
+        'auth': python_tds.login.SSPIAuth() if False else None,  # SQL auth only per user; keep placeholder
+        'use_tds': 7.4,
+        'encrypt': True,
+        'trust_server_certificate': True,
+    }
 
 
 
@@ -62,8 +50,8 @@ def get_local_objects(folder: str):
 
 
 def sync_schema_objects(config: Dict, sql_schema_dir: str, schema_name: str):
-    conn_str = _build_conn_str(config)
-    with pyodbc.connect(conn_str) as conn:
+    params = _build_conn_params(config)
+    with python_tds.connect(**{k: v for k, v in params.items() if v is not None}) as conn:
         cursor = conn.cursor()
         for obj_type in OBJECT_QUERIES:
             print(f'Processing {obj_type}...')

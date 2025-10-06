@@ -28,7 +28,7 @@ if not defined PY (
   exit /b 127
 )
 
-for %%M in (yaml pandas flask pyodbc sqlparse sqlglot werkzeug) do (
+for %%M in (yaml pandas flask pytds sqlparse sqlglot werkzeug) do (
   %PY% -c "import %%M" 1>nul 2>nul || set NEED_INSTALL=1
 )
 
@@ -46,7 +46,7 @@ if defined NEED_INSTALL (
 
 REM Re-check; if still missing, offer creating a venv
 set NEED_INSTALL=
-for %%M in (yaml pandas flask pyodbc sqlparse sqlglot werkzeug) do (
+for %%M in (yaml pandas flask pytds sqlparse sqlglot werkzeug) do (
   %PY% -c "import %%M" 1>nul 2>nul || set NEED_INSTALL=1
 )
 

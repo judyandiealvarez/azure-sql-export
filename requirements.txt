@@ -1,4 +1,4 @@
-pyodbc>=4.0.39
+python-tds>=1.10.0
 pandas>=1.5.0
 PyYAML>=6.0
 pathlib2>=2.3.7; python_version < "3.4"

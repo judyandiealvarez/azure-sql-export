@@ -3,7 +3,7 @@ import sys
 import json
 import yaml
 import argparse
-import pyodbc
+import pytds
 
 SQL_SCHEMA_DIR = os.path.join('sql', 'dna', 'BPG_FinOps_Invoice_Reimbursement')
 os.makedirs(SQL_SCHEMA_DIR, exist_ok=True)
@@ -65,8 +65,7 @@ def get_local_objects(folder):
             for f in os.listdir(folder) if f.endswith('.sql')}
 
 def sync_schema_objects():
-    conn_str = f'DRIVER={DRIVER};SERVER={SERVER};DATABASE={DATABASE};UID={USERNAME};PWD={PASSWORD}'
-    with pyodbc.connect(conn_str) as conn:
+    with pytds.connect(server=SERVER, database=DATABASE, user=USERNAME, password=PASSWORD, port=1433, use_tds=7.4, encrypt=True, trust_server_certificate=True) as conn:
         cursor = conn.cursor()
         for obj_type in OBJECT_QUERIES:
             print(f'Processing {obj_type}...')

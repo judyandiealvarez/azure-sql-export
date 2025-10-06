@@ -3,7 +3,7 @@ import sys
 import json
 import yaml
 import argparse
-import pyodbc
+import pytds
 from datetime import datetime
 
 SQL_SCHEMA_DIR = os.path.join('sql', 'dna', 'BPG_FinOps_Invoice_Reimbursement')
@@ -31,7 +31,7 @@ def _build_queries(schema_name: str):
             JOIN sys.schemas s ON v.schema_id = s.schema_id
             WHERE s.name = '{schema_name}'
         """,
-        'StoredProcedures': f"""
+        'Stored Procedures': f"""
             SELECT p.name, OBJECT_DEFINITION(p.object_id) AS definition
             FROM sys.procedures p
             JOIN sys.schemas s ON p.schema_id = s.schema_id
@@ -69,16 +69,15 @@ def get_file_objects(folder):
     return result
 
 def generate_migration():
-    conn_str = f'DRIVER={{{DRIVER}}};SERVER={SERVER};PORT=1433;DATABASE={DATABASE};UID={USERNAME};PWD={PASSWORD};TDS_Version=8.0'
+    # Using pytds; no ODBC
     migration_sql = []
 
 
-
-    with pyodbc.connect(conn_str) as conn:
+    with pytds.connect(server=SERVER, database=DATABASE, user=USERNAME, password=PASSWORD, port=1433, use_tds=7.4, encrypt=True, trust_server_certificate=True) as conn:
         cursor = conn.cursor()
         for obj_type in OBJECT_QUERIES:
             db_objs = get_db_objects(cursor, obj_type)
-            folder_name = obj_type if obj_type != 'StoredProcedures' else 'Stored Procedures'
+            folder_name = obj_type
             folder = os.path.join(SQL_SCHEMA_DIR, folder_name)
             file_objs = get_file_objects(folder)
 

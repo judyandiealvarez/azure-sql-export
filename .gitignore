@@ -1,5 +1,3 @@
-sql/
-config.yaml
 # Python
 __pycache__/
 *.py[cod]

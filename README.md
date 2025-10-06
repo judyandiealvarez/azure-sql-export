@@ -5,21 +5,21 @@ Unified command-line for exporting, importing, comparing, copying data, web UI, 
 ## Install
 
 - Local dev (recommended):
-```bash
-pip install -r requirements.txt
+   ```bash
+   pip install -r requirements.txt
 pip install -e .
 ```
 This installs the `azs` command on PATH.
 
 - Run without install (repo root):
-```bash
+   ```bash
 ./azs <command> [args]
 ```
 
 ## Quick start
 
-```bash
-cp config.example.yaml config.yaml
+   ```bash
+   cp config.example.yaml config.yaml
 # edit config.yaml (server, database, auth, etc.)
 
 # export schema/data
@@ -59,7 +59,7 @@ Run `azs <command> -h` for command-specific flags.
 ## Unified config (config.yaml)
 
 Copy and edit:
-```bash
+   ```bash
 cp config.example.yaml config.yaml
 ```
 Key sections (YAML or JSON supported):
