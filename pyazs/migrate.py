@@ -45,6 +45,16 @@ def _drop_if_exists(obj_type: str, schema_name: str, name: str) -> str:
         return f"IF OBJECT_ID('[{schema_name}].[{name}]') IS NOT NULL DROP TRIGGER [{schema_name}].[{name}];\nGO\n"
     return ''
 
+def _merge_header_from_file(file_def: str, db_def: str) -> str:
+    """Use the file's first line (header) and the DB's remaining body.
+    This keeps exact header bytes consistent with files while preserving DB body.
+    """
+    file_parts = file_def.split('\n', 1)
+    db_parts = db_def.split('\n', 1)
+    file_header = file_parts[0] if file_parts else file_def
+    db_body = db_parts[1] if len(db_parts) > 1 else ''
+    return file_header + ('\n' + db_body if db_body else '')
+
 
 def _build_conn_params(config: Dict) -> Dict:
     server = config['server']
@@ -132,10 +142,11 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                             print('--- DB slice ---')
                             print(repr(db_def[start:end_d]))
                         updated[obj_type].append(name)
-                        # Emit DROP IF EXISTS + exact DB text (no header transform)
+                        # Emit DROP IF EXISTS + DB text with file's header to match local style
                         migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n")
                         migration_sql.append(_drop_if_exists(obj_type, schema_name, name))
-                        migration_sql.append(db_def + "\nGO\n")
+                        merged = _merge_header_from_file(file_def, db_def)
+                        migration_sql.append(merged + "\nGO\n")
 
             # Find objects to drop (in files but not in DB)
             for name, file_def in file_objs.items():
@@ -160,7 +171,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
         next_num = max(nums, default=0) + 1
         filename = f"update{next_num:04d}.sql"
         outfile = os.path.join(migrations_dir, filename)
-        with open(outfile, 'w', encoding='utf-8') as f:
+        with open(outfile, 'w', encoding='utf-8', newline='') as f:
             # Counts table
             f.write('-- Summary\n')
             f.write(f"-- Schema: {schema_name}\n")
