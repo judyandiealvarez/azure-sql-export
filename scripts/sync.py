@@ -65,7 +65,7 @@ def get_local_objects(folder):
             for f in os.listdir(folder) if f.endswith('.sql')}
 
 def sync_schema_objects():
-    with pytds.connect(server=SERVER, database=DATABASE, user=USERNAME, password=PASSWORD, port=1433, use_tds=7.4, encrypt=True, trust_server_certificate=True) as conn:
+    with pytds.connect(server=SERVER, database=DATABASE, user=USERNAME, password=PASSWORD, port=1433, tds_version=7.4) as conn:
         cursor = conn.cursor()
         for obj_type in OBJECT_QUERIES:
             print(f'Processing {obj_type}...')

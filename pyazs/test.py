@@ -30,9 +30,7 @@ def _build_conn_params(config):
         'user': str(username),
         'password': str(password),
         'port': 1433,
-        'use_tds': 7.4,
-        'encrypt': True,
-        'trust_server_certificate': True,
+        'tds_version': 7.4,
     }
 
 

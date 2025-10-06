@@ -4,7 +4,7 @@ import sys
 import json
 import yaml
 import argparse
-import python_tds
+import pytds
 from typing import Dict
 try:
     from .common import get_db_objects, OBJECT_QUERIES, write_definition_to_file
@@ -33,10 +33,7 @@ def _build_conn_params(config: Dict) -> Dict:
         'user': str(username),
         'password': str(password),
         'port': 1433,
-        'auth': python_tds.login.SSPIAuth() if False else None,  # SQL auth only per user; keep placeholder
-        'use_tds': 7.4,
-        'encrypt': True,
-        'trust_server_certificate': True,
+        'tds_version': 7.4,
     }
 
 
@@ -51,7 +48,7 @@ def get_local_objects(folder: str):
 
 def sync_schema_objects(config: Dict, sql_schema_dir: str, schema_name: str):
     params = _build_conn_params(config)
-    with python_tds.connect(**{k: v for k, v in params.items() if v is not None}) as conn:
+    with pytds.connect(**{k: v for k, v in params.items() if v is not None}) as conn:
         cursor = conn.cursor()
         for obj_type in OBJECT_QUERIES:
             print(f'Processing {obj_type}...')
