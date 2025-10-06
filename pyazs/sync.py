@@ -6,6 +6,7 @@ import yaml
 import argparse
 import pytds
 from typing import Dict
+import certifi
 try:
     from .common import get_db_objects, OBJECT_QUERIES, write_definition_to_file
 except ImportError:
@@ -33,7 +34,7 @@ def _build_conn_params(config: Dict) -> Dict:
         'user': str(username),
         'password': str(password),
         'port': 1433,
-        'cafile': None,
+        'cafile': certifi.where(),
         'validate_host': False,
     }
 
