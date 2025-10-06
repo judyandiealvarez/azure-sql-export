@@ -37,7 +37,6 @@ def _build_conn_params(config: Dict) -> Dict:
         'user': str(username),
         'password': str(password),
         'port': 1433,
-        'tds_version': 7.4,
     }
 
 

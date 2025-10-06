@@ -73,7 +73,7 @@ def generate_migration():
     migration_sql = []
 
 
-    with pytds.connect(server=SERVER, database=DATABASE, user=USERNAME, password=PASSWORD, port=1433, tds_version=7.4) as conn:
+    with pytds.connect(server=SERVER, database=DATABASE, user=USERNAME, password=PASSWORD, port=1433) as conn:
         cursor = conn.cursor()
         for obj_type in OBJECT_QUERIES:
             db_objs = get_db_objects(cursor, obj_type)
