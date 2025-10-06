@@ -43,12 +43,19 @@ def test_object(config, object_name: str, schema_name: str, hex_output: bool = F
         cursor = conn.cursor()
         
         for obj_type in OBJECT_QUERIES:
-            db_objs = get_db_objects(cursor, obj_type, schema_name)
-            
-            if object_name in db_objs:
-                definition = db_objs[object_name]
+            db_objs = get_db_objects(cursor, obj_type, schema_name, include_null=True)
+            # Case-insensitive lookup
+            lookup = {name.lower(): name for name in db_objs.keys()}
+            key = object_name.lower()
+            if key in lookup:
+                real_name = lookup[key]
+                definition = db_objs[real_name]
                 print(f"Found {obj_type[:-1]}: {object_name}")
                 
+                if definition is None:
+                    print("Definition unavailable (permissions or WITH ENCRYPTION).")
+                    return
+
                 if output_file:
                     write_definition_to_file(definition, output_file)
                     print(f"Definition written to: {output_file}")
@@ -72,8 +79,18 @@ def test_object(config, object_name: str, schema_name: str, hex_output: bool = F
                         print("Definition:")
                         print(definition)
                 return
-        
+        # Not found: show suggestions
         print(f"Object '{object_name}' not found in schema '{schema_name}'")
+        candidates = []
+        for obj_type in OBJECT_QUERIES:
+            db_objs = get_db_objects(cursor, obj_type, schema_name, include_null=True)
+            for name in db_objs.keys():
+                if object_name.lower() in name.lower():
+                    candidates.append(f"{obj_type}:{name}")
+        if candidates:
+            print("Did you mean:")
+            for c in candidates[:10]:
+                print(f"  - {c}")
 
 
 def main(argv=None) -> int:

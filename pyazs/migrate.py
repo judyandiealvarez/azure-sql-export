@@ -23,6 +23,14 @@ def _load_config(config_path: str) -> Dict:
         if config_path.endswith(('.yaml', '.yml')):
             return yaml.safe_load(f)
         return json.load(f)
+## IMPORTANT: exact comparison only; no normalization
+
+def _first_diff(a: str, b: str) -> int:
+    limit = min(len(a), len(b))
+    for i in range(limit):
+        if a[i] != b[i]:
+            return i
+    return limit if len(a) != len(b) else -1
 
 
 def _build_conn_params(config: Dict) -> Dict:
@@ -97,14 +105,15 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                         print(f"[MIGRATION] {obj_type} '{name}' differs between DB and file. Will UPDATE.")
                         if debug_shown < debug_diff and (only_object is None or only_object == name):
                             debug_shown += 1
-                            print('--- FILE DEF (raw) ---')
-                            print(file_def)
-                            print('--- DB DEF (raw) ---')
-                            print(db_def)
-                            print('--- FILE DEF (repr) ---')
-                            print(repr(file_def))
-                            print('--- DB DEF (repr) ---')
-                            print(repr(db_def))
+                            idx = _first_diff(file_def, db_def)
+                            print(f"--- First diff index: {idx} (file len={len(file_def)}, db len={len(db_def)}) ---")
+                            start = max(0, idx - 40) if idx >= 0 else 0
+                            end_f = min(len(file_def), (idx + 40) if idx >= 0 else len(file_def))
+                            end_d = min(len(db_def), (idx + 40) if idx >= 0 else len(db_def))
+                            print('--- FILE slice ---')
+                            print(repr(file_def[start:end_f]))
+                            print('--- DB slice ---')
+                            print(repr(db_def[start:end_d]))
                         updated[obj_type].append(name)
                         migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
 
