@@ -4,6 +4,7 @@ import json
 import yaml
 import argparse
 import pytds
+import certifi
 try:
     from .common import get_db_objects, OBJECT_QUERIES, write_definition_to_file
 except ImportError:
@@ -30,6 +31,8 @@ def _build_conn_params(config):
         'user': str(username),
         'password': str(password),
         'port': 1433,
+        'cafile': certifi.where(),
+        'validate_host': False,
     }
 
 

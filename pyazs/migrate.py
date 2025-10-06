@@ -5,6 +5,7 @@ import json
 import yaml
 import argparse
 import pytds
+import certifi
 from datetime import datetime
 from typing import Dict, List, DefaultDict
 from collections import defaultdict
@@ -37,6 +38,8 @@ def _build_conn_params(config: Dict) -> Dict:
         'user': str(username),
         'password': str(password),
         'port': 1433,
+        'cafile': certifi.where(),
+        'validate_host': False,
     }
 
 

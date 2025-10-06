@@ -1,4 +1,6 @@
 python-tds>=1.10.0
+pyOpenSSL>=24.0.0
+certifi>=2024.7.4
 pandas>=1.5.0
 PyYAML>=6.0
 pathlib2>=2.3.7; python_version < "3.4"
