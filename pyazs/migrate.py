@@ -39,11 +39,14 @@ def _definition_for_update(obj_type: str, definition: str) -> str:
     Tables are left as-is (table diffs not auto-altered here).
     """
     if obj_type in ("Views", "StoredProcedures", "Functions", "Triggers"):
-        # For existing objects emit ALTER <type> ...
-        # Preserve leading whitespace and spacing before object type; keep original object-type casing
-        pattern = re.compile(r"^\ufeff?(\s*)(?i:CREATE(?:\s+OR\s+ALTER)?)(\s+)(?i:(view|procedure|function|trigger))", re.IGNORECASE)
+        # Replace leading CREATE [OR ALTER] <spaces> <TYPE> with ALTER <same spaces> <TYPE>
+        # Preserve leading whitespace and the original object-type casing and spacing
+        pattern = re.compile(r"^\ufeff?(\s*)create(?:\s+or\s+alter)?(\s+)(view|procedure|function|trigger)\b", re.IGNORECASE)
         def repl(m: re.Match) -> str:
-            return f"{m.group(1)}ALTER{m.group(2)}{m.group(3).upper()}"
+            leading_ws = m.group(1)
+            spaces_before_type = m.group(2)
+            obj_type_token = m.group(3)  # preserve original casing
+            return f"{leading_ws}ALTER{spaces_before_type}{obj_type_token}"
         return pattern.sub(repl, definition, count=1)
     return definition
 
