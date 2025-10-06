@@ -8,6 +8,7 @@ import pytds
 import certifi
 from datetime import datetime
 from typing import Dict, List, DefaultDict
+import re
 from collections import defaultdict
 try:
     from .common import get_db_objects, OBJECT_QUERIES, write_definition_to_file
@@ -31,6 +32,15 @@ def _first_diff(a: str, b: str) -> int:
         if a[i] != b[i]:
             return i
     return limit if len(a) != len(b) else -1
+
+def _definition_for_update(obj_type: str, definition: str) -> str:
+    """Return DDL suitable for updating an existing object.
+    For views/procedures/functions/triggers emit CREATE OR ALTER to avoid DROP/CREATE.
+    Tables are left as-is (table diffs not auto-altered here).
+    """
+    if obj_type in ("Views", "StoredProcedures", "Functions", "Triggers"):
+        return re.sub(r"^(\s*)CREATE(\s+)", r"\1CREATE OR ALTER\2", definition, count=1, flags=re.IGNORECASE)
+    return definition
 
 
 def _build_conn_params(config: Dict) -> Dict:
@@ -115,7 +125,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                             print('--- DB slice ---')
                             print(repr(db_def[start:end_d]))
                         updated[obj_type].append(name)
-                        migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{db_def}\nGO\n")
+                        migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{_definition_for_update(obj_type, db_def)}\nGO\n")
 
             # Find objects to drop (in files but not in DB)
             for name, file_def in file_objs.items():
