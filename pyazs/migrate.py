@@ -39,15 +39,21 @@ def _definition_for_update(obj_type: str, definition: str) -> str:
     Tables are left as-is (table diffs not auto-altered here).
     """
     if obj_type in ("Views", "StoredProcedures", "Functions", "Triggers"):
-        # Replace leading CREATE [OR ALTER] <spaces> <TYPE> with ALTER <same spaces> <TYPE>
-        # Preserve leading whitespace and the original object-type casing and spacing
-        pattern = re.compile(r"^\ufeff?(\s*)create(?:\s+or\s+alter)?(\s+)(view|procedure|function|trigger)\b", re.IGNORECASE)
+        # Convert the first line that declares the object from CREATE[*] <type> to ALTER <type>
+        # Preserve leading whitespace and original <type> casing/spaces. Allow comments/blank lines before header.
+        # 1) Try at file start (after optional BOM/whitespace)
+        start_pattern = re.compile(r"^\ufeff?(\s*)create(?:\s+or\s+alter)?(\s+)(view|procedure|function|trigger)\b",
+                                   re.IGNORECASE)
         def repl(m: re.Match) -> str:
-            leading_ws = m.group(1)
-            spaces_before_type = m.group(2)
-            obj_type_token = m.group(3)  # preserve original casing
-            return f"{leading_ws}ALTER{spaces_before_type}{obj_type_token}"
-        return pattern.sub(repl, definition, count=1)
+            return f"{m.group(1)}ALTER{m.group(2)}{m.group(3)}"
+        new_def, n = start_pattern.subn(repl, definition, count=1)
+        if n:
+            return new_def
+        # 2) Fallback: convert the first line beginning with CREATE <type> anywhere (skip comments not guaranteed)
+        line_pattern = re.compile(r"(?m)^(\s*)create(?:\s+or\s+alter)?(\s+)(view|procedure|function|trigger)\b",
+                                  re.IGNORECASE)
+        new_def, n = line_pattern.subn(repl, definition, count=1)
+        return new_def if n else definition
     return definition
 
 
