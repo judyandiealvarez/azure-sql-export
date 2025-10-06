@@ -33,22 +33,17 @@ def _first_diff(a: str, b: str) -> int:
             return i
     return limit if len(a) != len(b) else -1
 
-def _definition_for_update(obj_type: str, definition: str) -> str:
-    """Return DDL suitable for updating an existing object.
-    For views/procedures/functions/triggers emit CREATE OR ALTER to avoid DROP/CREATE.
-    Tables are left as-is (table diffs not auto-altered here).
-    """
-    if obj_type in ("Views", "StoredProcedures", "Functions", "Triggers"):
-        # Replace leading CREATE [OR ALTER] <spaces> <TYPE> with ALTER <same spaces> <TYPE>
-        # Preserve leading whitespace and the original object-type casing and spacing
-        pattern = re.compile(r"^\ufeff?(\s*)create(?:\s+or\s+alter)?(\s+)(view|procedure|function|trigger)\b", re.IGNORECASE)
-        def repl(m: re.Match) -> str:
-            leading_ws = m.group(1)
-            spaces_before_type = m.group(2)
-            obj_type_token = m.group(3)  # preserve original casing
-            return f"{leading_ws}ALTER{spaces_before_type}{obj_type_token}"
-        return pattern.sub(repl, definition, count=1)
-    return definition
+def _drop_if_exists(obj_type: str, schema_name: str, name: str) -> str:
+    if obj_type == 'Views':
+        return f"IF OBJECT_ID('[{schema_name}].[{name}]', 'V') IS NOT NULL DROP VIEW [{schema_name}].[{name}];\nGO\n"
+    if obj_type == 'StoredProcedures':
+        return f"IF OBJECT_ID('[{schema_name}].[{name}]', 'P') IS NOT NULL DROP PROCEDURE [{schema_name}].[{name}];\nGO\n"
+    if obj_type == 'Functions':
+        # Covers scalar and table-valued functions
+        return f"IF OBJECT_ID('[{schema_name}].[{name}]') IS NOT NULL DROP FUNCTION [{schema_name}].[{name}];\nGO\n"
+    if obj_type == 'Triggers':
+        return f"IF OBJECT_ID('[{schema_name}].[{name}]') IS NOT NULL DROP TRIGGER [{schema_name}].[{name}];\nGO\n"
+    return ''
 
 
 def _build_conn_params(config: Dict) -> Dict:
@@ -137,7 +132,10 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                             print('--- DB slice ---')
                             print(repr(db_def[start:end_d]))
                         updated[obj_type].append(name)
-                        migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n{_definition_for_update(obj_type, db_def)}\nGO\n")
+                        # Emit DROP IF EXISTS + exact DB text (no header transform)
+                        migration_sql.append(f"-- Update {obj_type[:-1]}: {name}\n")
+                        migration_sql.append(_drop_if_exists(obj_type, schema_name, name))
+                        migration_sql.append(db_def + "\nGO\n")
 
             # Find objects to drop (in files but not in DB)
             for name, file_def in file_objs.items():
