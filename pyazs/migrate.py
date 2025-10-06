@@ -93,11 +93,15 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
             folder_name = obj_type if obj_type != 'StoredProcedures' else 'Stored Procedures'
             folder = os.path.join(sql_schema_dir, folder_name)
             file_objs = get_file_objects(folder)
+            file_objs_ci = {k.lower(): v for k, v in file_objs.items()}
 
             # Find objects to create or alter (bring files up to DB state)
             print(f"[DEBUG] Processing {obj_type}: {list(db_objs.keys())}")
+            db_names_lower = {k.lower() for k in db_objs.keys()}
             for name, db_def in db_objs.items():
                 file_def = file_objs.get(name)
+                if file_def is None:
+                    file_def = file_objs_ci.get(name.lower())
                 if file_def is None:
                     if db_def is None:
                         print(f"[MIGRATION] {obj_type} '{name}' exists in DB but definition is unavailable (possibly WITH ENCRYPTION). Skipping SQL; report only.")
@@ -129,7 +133,7 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
 
             # Find objects to drop (in files but not in DB)
             for name, file_def in file_objs.items():
-                if name not in db_objs:
+                if name.lower() not in db_names_lower:
                     print(f"[MIGRATION] {obj_type} '{name}' exists in files but not in DB. Will DROP.")
                     dropped[obj_type].append(name)
                     if obj_type == 'Tables':
