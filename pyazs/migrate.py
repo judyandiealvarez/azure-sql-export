@@ -33,6 +33,15 @@ def _first_diff(a: str, b: str) -> int:
             return i
     return limit if len(a) != len(b) else -1
 
+def _split_header_body(text: str) -> tuple[str, str]:
+    """Return (first_line, body_without_first_line_terminator).
+    Header is the very first line; body is everything after the first newline.
+    We keep bytes as-is (no normalization)."""
+    idx = text.find('\n')
+    if idx == -1:
+        return (text, '')
+    return (text[:idx], text[idx+1:])
+
 def _definition_for_update(obj_type: str, definition: str) -> str:
     """Return DDL suitable for updating an existing object.
     For views/procedures/functions/triggers emit CREATE OR ALTER to avoid DROP/CREATE.
@@ -129,19 +138,21 @@ def generate_migration(config: Dict, sql_schema_dir: str, migrations_dir: str, s
                     if db_def is None:
                         # Cannot compare; report and skip SQL body
                         print(f"[MIGRATION] {obj_type} '{name}' definition unavailable in DB (possibly WITH ENCRYPTION). Skipping UPDATE.")
-                    elif file_def != db_def:
+                    elif _split_header_body(file_def)[1] != _split_header_body(db_def)[1]:
                         print(f"[MIGRATION] {obj_type} '{name}' differs between DB and file. Will UPDATE.")
                         if debug_shown < debug_diff and (only_object is None or only_object == name):
                             debug_shown += 1
-                            idx = _first_diff(file_def, db_def)
+                            f_body = _split_header_body(file_def)[1]
+                            d_body = _split_header_body(db_def)[1]
+                            idx = _first_diff(f_body, d_body)
                             print(f"--- First diff index: {idx} (file len={len(file_def)}, db len={len(db_def)}) ---")
                             start = max(0, idx - 40) if idx >= 0 else 0
-                            end_f = min(len(file_def), (idx + 40) if idx >= 0 else len(file_def))
-                            end_d = min(len(db_def), (idx + 40) if idx >= 0 else len(db_def))
+                            end_f = min(len(f_body), (idx + 40) if idx >= 0 else len(f_body))
+                            end_d = min(len(d_body), (idx + 40) if idx >= 0 else len(d_body))
                             print('--- FILE slice ---')
-                            print(repr(file_def[start:end_f]))
+                            print(repr(f_body[start:end_f]))
                             print('--- DB slice ---')
-                            print(repr(db_def[start:end_d]))
+                            print(repr(d_body[start:end_d]))
                         updated[obj_type].append(name)
                         # Update DB to match local files: use file definition (header converted to ALTER)
                         migration_sql.append(
