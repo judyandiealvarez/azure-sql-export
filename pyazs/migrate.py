@@ -43,7 +43,7 @@ def _definition_for_update(obj_type: str, definition: str) -> str:
         # Preserve leading whitespace and spacing before object type; keep original object-type casing
         pattern = re.compile(r"^\ufeff?(\s*)(?i:CREATE(?:\s+OR\s+ALTER)?)(\s+)(?i:(view|procedure|function|trigger))", re.IGNORECASE)
         def repl(m: re.Match) -> str:
-            return f"{m.group(1)}ALTER{m.group(2)}{m.group(3)}"
+            return f"{m.group(1)}ALTER{m.group(2)}{m.group(3).upper()}"
         return pattern.sub(repl, definition, count=1)
     return definition
 
