@@ -79,7 +79,7 @@ def _build_conn_params(config: Dict) -> Dict:
         'user': str(username),
         'password': str(password),
         'port': 1433,
-        'cafile': None,
+        'cafile': certifi.where(),
         'validate_host': False,
     }
 
